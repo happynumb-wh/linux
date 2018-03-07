@@ -5020,6 +5020,7 @@ static int ext4_load_and_init_journal(struct super_block *sb,
 	}
 
 	set_task_ioprio(sbi->s_journal->j_task, ctx->journal_ioprio);
+	set_task_ioprio(sbi->s_journal->j_checkpoint_task, ctx->journal_ioprio);
 
 	sbi->s_journal->j_submit_inode_data_buffers =
 		ext4_journal_submit_inode_data_buffers;
@@ -6668,6 +6669,7 @@ static int __ext4_remount(struct fs_context *fc, struct super_block *sb)
 	if (sbi->s_journal) {
 		ext4_init_journal_params(sb, sbi->s_journal);
 		set_task_ioprio(sbi->s_journal->j_task, ctx->journal_ioprio);
+		set_task_ioprio(sbi->s_journal->j_checkpoint_task, ctx->journal_ioprio);
 	}
 
 	/* Flush outstanding errors before changing fs state */

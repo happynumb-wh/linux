@@ -6149,6 +6149,16 @@ static void shrink_node_memcgs(pg_data_t *pgdat, struct scan_control *sc)
 			mem_cgroup_iter_break(target_memcg, memcg);
 			break;
 		}
+
+		/*
+		 * Memcg background reclaim would break iter once water
+		 * mark is satisfied.
+		 */
+		if (cgroup_reclaim(sc) && current_is_kswapd() &&
+		     is_wmark_ok(target_memcg, false)) {
+			mem_cgroup_iter_break(target_memcg, memcg);
+			break;
+		}
 	} while ((memcg = mem_cgroup_iter(target_memcg, memcg, partial)));
 }
 
@@ -6191,7 +6201,7 @@ again:
 	if (nr_node_reclaimed)
 		reclaimable = true;
 
-	if (current_is_kswapd()) {
+	if (current_is_kswapd() && !cgroup_reclaim(sc)) {
 		/*
 		 * If reclaim is isolating dirty pages under writeback,
 		 * it implies that the long-lived page allocation rate
@@ -6474,6 +6484,10 @@ retry:
 		__count_zid_vm_events(ALLOCSTALL, sc->reclaim_idx, 1);
 
 	do {
+		if (current_is_kswapd() && cgroup_reclaim(sc) &&
+		    is_wmark_ok(sc->target_mem_cgroup, false))
+			break;
+
 		if (!sc->proactive)
 			vmpressure_prio(sc->gfp_mask, sc->target_mem_cgroup,
 					sc->priority);
@@ -6545,8 +6559,12 @@ retry:
 		goto retry;
 	}
 
-	/* Untapped cgroup reserves?  Don't OOM, retry. */
-	if (sc->memcg_low_skipped) {
+	/*
+	 * Untapped cgroup reserves?  Don't OOM, retry.
+	 *
+	 * Memcg kswapd should not break low protection.
+	 */
+	if (sc->memcg_low_skipped && !current_is_kswapd()) {
 		sc->priority = initial_priority;
 		sc->force_deactivate = 0;
 		sc->memcg_low_reclaim = 1;

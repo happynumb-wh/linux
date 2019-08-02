@@ -1066,6 +1066,9 @@ static unsigned int shrink_folio_list(struct list_head *folio_list,
 	u64 start = 0;
 	bool do_demote_pass;
 	struct swap_iocb *plug = NULL;
+	struct lruvec *target_lruvec;
+
+	target_lruvec = mem_cgroup_lruvec(sc->target_mem_cgroup, pgdat);
 
 	folio_batch_init(&free_folios);
 	memset(stat, 0, sizeof(*stat));
@@ -1189,7 +1192,7 @@ retry:
 			/* Case 1 above */
 			if (current_is_kswapd() &&
 			    folio_test_reclaim(folio) &&
-			    test_bit(PGDAT_WRITEBACK, &pgdat->flags)) {
+			    test_bit(LRUVEC_WRITEBACK, &target_lruvec->flags)) {
 				stat->nr_immediate += nr_pages;
 				goto activate_locked;
 
@@ -6201,7 +6204,7 @@ again:
 	if (nr_node_reclaimed)
 		reclaimable = true;
 
-	if (current_is_kswapd() && !cgroup_reclaim(sc)) {
+	if (current_is_kswapd()) {
 		/*
 		 * If reclaim is isolating dirty pages under writeback,
 		 * it implies that the long-lived page allocation rate
@@ -6214,13 +6217,13 @@ again:
 		 * the dirtying process is throttled in the same way
 		 * balance_dirty_pages() manages.
 		 *
-		 * Once a node is flagged PGDAT_WRITEBACK, kswapd will
+		 * Once a node is flagged LRUVEC_WRITEBACK, kswapd will
 		 * count the number of pages under pages flagged for
 		 * immediate reclaim and stall if any are encountered
 		 * in the nr_immediate check below.
 		 */
 		if (sc->nr.writeback && sc->nr.writeback == sc->nr.taken)
-			set_bit(PGDAT_WRITEBACK, &pgdat->flags);
+			set_bit(LRUVEC_WRITEBACK, &target_lruvec->flags);
 
 		/*
 		 * If kswapd scans pages marked for immediate
@@ -6244,7 +6247,7 @@ again:
 		if (cgroup_reclaim(sc) && writeback_throttling_sane(sc))
 			set_bit(LRUVEC_CGROUP_CONGESTED, &target_lruvec->flags);
 
-		if (current_is_kswapd())
+		if (current_is_kswapd() && !cgroup_reclaim(sc))
 			set_bit(LRUVEC_NODE_CONGESTED, &target_lruvec->flags);
 	}
 
@@ -6516,6 +6519,8 @@ retry:
 			lruvec = mem_cgroup_lruvec(sc->target_mem_cgroup,
 						   zone->zone_pgdat);
 			clear_bit(LRUVEC_CGROUP_CONGESTED, &lruvec->flags);
+			if (current_is_kswapd())
+				clear_bit(LRUVEC_WRITEBACK, &lruvec->flags);
 		}
 	}
 
@@ -6967,7 +6972,7 @@ static void clear_pgdat_congested(pg_data_t *pgdat)
 
 	clear_bit(LRUVEC_NODE_CONGESTED, &lruvec->flags);
 	clear_bit(LRUVEC_CGROUP_CONGESTED, &lruvec->flags);
-	clear_bit(PGDAT_WRITEBACK, &pgdat->flags);
+	clear_bit(LRUVEC_WRITEBACK, &lruvec->flags);
 }
 
 /*

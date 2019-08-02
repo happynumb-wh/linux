@@ -435,6 +435,9 @@ enum lruvec_flags {
 	 */
 	LRUVEC_CGROUP_CONGESTED,
 	LRUVEC_NODE_CONGESTED,
+	LRUVEC_WRITEBACK,		/* reclaim scanning has recently found
+					 * many pages under writeback
+					 */
 };
 
 #endif /* !__GENERATING_BOUNDS_H */
@@ -1161,9 +1164,6 @@ struct zone {
 } ____cacheline_internodealigned_in_smp;
 
 enum pgdat_flags {
-	PGDAT_WRITEBACK,		/* reclaim scanning has recently found
-					 * many pages under writeback
-					 */
 	PGDAT_RECLAIM_LOCKED,		/* prevents concurrent reclaim */
 };
 

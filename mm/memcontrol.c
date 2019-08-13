@@ -111,6 +111,8 @@ static struct kmem_cache *memcg_pn_cachep;
 static DECLARE_WAIT_QUEUE_HEAD(memcg_cgwb_frn_waitq);
 #endif
 
+struct workqueue_struct *memcg_wmark_wq;
+
 static inline bool task_is_dying(void)
 {
 	return tsk_is_oom_victim(current) || fatal_signal_pending(current) ||
@@ -2500,6 +2502,37 @@ static int memcg_hotplug_cpu_dead(unsigned int cpu)
 	return 0;
 }
 
+static void reclaim_wmark(struct mem_cgroup *memcg)
+{
+	long nr_pages;
+
+	if (is_wmark_ok(memcg, false))
+		return;
+
+	nr_pages = page_counter_read(&memcg->memory) -
+		   memcg->memory.wmark_low;
+	if (nr_pages <= 0)
+		return;
+
+	nr_pages = max_t(unsigned long, SWAP_CLUSTER_MAX, nr_pages);
+
+	try_to_free_mem_cgroup_pages(memcg, nr_pages,
+				     GFP_KERNEL,
+				     MEMCG_RECLAIM_MAY_SWAP,
+				     NULL);
+}
+
+static void wmark_work_func(struct work_struct *work)
+{
+	struct mem_cgroup *memcg;
+
+	memcg = container_of(work, struct mem_cgroup, wmark_work);
+
+	current->flags |= PF_MEMALLOC;
+	reclaim_wmark(memcg);
+	current->flags &= ~PF_MEMALLOC;
+}
+
 static unsigned long reclaim_high(struct mem_cgroup *memcg,
 				  unsigned int nr_pages,
 				  gfp_t gfp_mask)
@@ -2924,6 +2957,11 @@ done_restock:
 	 */
 	do {
 		bool mem_high, swap_high;
+
+		if (!is_wmark_ok(memcg, true)) {
+			queue_work(memcg_wmark_wq, &memcg->wmark_work);
+			break;
+		}
 
 		mem_high = page_counter_read(&memcg->memory) >
 			READ_ONCE(memcg->memory.high);
@@ -4242,6 +4280,7 @@ static struct mem_cgroup *mem_cgroup_alloc(struct mem_cgroup *parent)
 		goto fail;
 
 	INIT_WORK(&memcg->high_work, high_work_func);
+	INIT_WORK(&memcg->wmark_work, wmark_work_func);
 	vmpressure_init(&memcg->vmpressure);
 	INIT_LIST_HEAD(&memcg->memory_peaks);
 	INIT_LIST_HEAD(&memcg->swap_peaks);
@@ -4302,6 +4341,7 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 		page_counter_init(&memcg->kmem, &parent->kmem, false);
 		page_counter_init(&memcg->tcpmem, &parent->tcpmem, false);
 #endif
+		WRITE_ONCE(memcg->wmark_ratio, READ_ONCE(parent->wmark_ratio));
 	} else {
 		init_memcg_stats();
 		init_memcg_events();
@@ -4311,9 +4351,15 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 		page_counter_init(&memcg->kmem, NULL, false);
 		page_counter_init(&memcg->tcpmem, NULL, false);
 #endif
+
+		/* initializing memcg wmark */
+		setup_memcg_wmark(memcg);
+
 		root_mem_cgroup = memcg;
 		return &memcg->css;
 	}
+
+	setup_memcg_wmark(memcg);
 
 	if (memcg_on_dfl && !cgroup_memory_nosocket)
 		static_branch_inc(&memcg_sockets_enabled_key);
@@ -4410,6 +4456,9 @@ static void mem_cgroup_css_offline(struct cgroup_subsys_state *css)
 	page_counter_set_min(&memcg->memory, 0);
 	page_counter_set_low(&memcg->memory, 0);
 
+	page_counter_set_wmark_low(&memcg->memory, PAGE_COUNTER_MAX);
+	page_counter_set_wmark_high(&memcg->memory, PAGE_COUNTER_MAX);
+
 	zswap_memcg_offline_cleanup(memcg);
 
 	memcg_offline_kmem(memcg);
@@ -4457,6 +4506,7 @@ static void mem_cgroup_css_free(struct cgroup_subsys_state *css)
 
 	vmpressure_cleanup(&memcg->vmpressure);
 	cancel_work_sync(&memcg->high_work);
+	cancel_work_sync(&memcg->wmark_work);
 	memcg1_remove_from_trees(memcg);
 	free_shrinker_info(memcg);
 	mem_cgroup_free(memcg);
@@ -4488,6 +4538,8 @@ static void mem_cgroup_css_reset(struct cgroup_subsys_state *css)
 	page_counter_set_min(&memcg->memory, 0);
 	page_counter_set_low(&memcg->memory, 0);
 	page_counter_set_high(&memcg->memory, PAGE_COUNTER_MAX);
+	page_counter_set_wmark_low(&memcg->memory, PAGE_COUNTER_MAX);
+	page_counter_set_wmark_high(&memcg->memory, PAGE_COUNTER_MAX);
 	memcg1_soft_limit_reset(memcg);
 	page_counter_set_high(&memcg->swap, PAGE_COUNTER_MAX);
 	memcg_wb_domain_size_changed(memcg);
@@ -4705,6 +4757,62 @@ static void mem_cgroup_lru_gen_attach(struct cgroup_taskset *tset)
 #else
 static void mem_cgroup_lru_gen_attach(struct cgroup_taskset *tset) {}
 #endif /* CONFIG_LRU_GEN */
+
+void setup_memcg_wmark(struct mem_cgroup *memcg)
+{
+	unsigned long high_wmark;
+	unsigned long low_wmark;
+	unsigned long max = memcg->memory.max;
+	unsigned int wmark_ratio = memcg->wmark_ratio;
+
+	if (wmark_ratio) {
+		high_wmark = (max * wmark_ratio) / 100;
+		low_wmark = high_wmark - (high_wmark >> 8);
+
+		page_counter_set_wmark_low(&memcg->memory, low_wmark);
+		page_counter_set_wmark_high(&memcg->memory, high_wmark);
+	} else {
+		page_counter_set_wmark_low(&memcg->memory, PAGE_COUNTER_MAX);
+		page_counter_set_wmark_high(&memcg->memory, PAGE_COUNTER_MAX);
+	}
+}
+
+int memory_wmark_ratio_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(seq_css(m));
+	unsigned int wmark_ratio = READ_ONCE(memcg->wmark_ratio);
+
+	seq_printf(m, "%d\n", wmark_ratio);
+
+	return 0;
+}
+
+ssize_t memory_wmark_ratio_write(struct kernfs_open_file *of,
+				 char *buf, size_t nbytes, loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	int ret, wmark_ratio;
+
+	buf = strstrip(buf);
+	if (!buf)
+		return -EINVAL;
+
+	ret = kstrtouint(buf, 0, &wmark_ratio);
+	if (ret)
+		return ret;
+
+	if (wmark_ratio > 100)
+		return -EINVAL;
+
+	xchg(&memcg->wmark_ratio, wmark_ratio);
+
+	setup_memcg_wmark(memcg);
+
+	if (!is_wmark_ok(memcg, true))
+		queue_work(memcg_wmark_wq, &memcg->wmark_work);
+
+	return nbytes;
+}
 
 static void mem_cgroup_kmem_attach(struct cgroup_taskset *tset)
 {
@@ -5772,6 +5880,13 @@ int __init mem_cgroup_init(void)
 	 * exceed S32_MAX / PAGE_SIZE.
 	 */
 	BUILD_BUG_ON(MEMCG_CHARGE_BATCH > S32_MAX / PAGE_SIZE);
+
+	memcg_wmark_wq = alloc_workqueue("memcg_wmark", WQ_MEM_RECLAIM |
+				WQ_UNBOUND | WQ_FREEZABLE,
+				WQ_UNBOUND_MAX_ACTIVE);
+
+	if (!memcg_wmark_wq)
+		return -ENOMEM;
 
 	cpuhp_setup_state_nocalls(CPUHP_MM_MEMCQ_DEAD, "mm/memctrl:dead", NULL,
 				  memcg_hotplug_cpu_dead);

@@ -97,6 +97,8 @@ enum {
 	RES_MAX_USAGE,
 	RES_FAILCNT,
 	RES_SOFT_LIMIT,
+	WMARK_HIGH_LIMIT,
+	WMARK_LOW_LIMIT,
 };
 
 #ifdef CONFIG_LOCKDEP
@@ -1605,8 +1607,15 @@ static int mem_cgroup_resize_max(struct mem_cgroup *memcg,
 		}
 	} while (true);
 
-	if (!ret && enlarge)
-		memcg1_oom_recover(memcg);
+	if (!ret) {
+		setup_memcg_wmark(memcg);
+
+		if (!is_wmark_ok(memcg, true))
+			queue_work(memcg_wmark_wq, &memcg->wmark_work);
+
+		if (enlarge)
+			memcg1_oom_recover(memcg);
+	}
 
 	return ret;
 }
@@ -1706,6 +1715,10 @@ static u64 mem_cgroup_read_u64(struct cgroup_subsys_state *css,
 		return counter->failcnt;
 	case RES_SOFT_LIMIT:
 		return (u64)READ_ONCE(memcg->soft_limit) * PAGE_SIZE;
+	case WMARK_HIGH_LIMIT:
+		return (u64)counter->wmark_high * PAGE_SIZE;
+	case WMARK_LOW_LIMIT:
+		return (u64)counter->wmark_low * PAGE_SIZE;
 	default:
 		BUG();
 	}
@@ -2177,6 +2190,24 @@ struct cftype mem_cgroup_legacy_files[] = {
 	{
 		.name = "stat",
 		.seq_show = memory_stat_show,
+	},
+	{
+		.name = "wmark_ratio",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memory_wmark_ratio_show,
+		.write = memory_wmark_ratio_write,
+	},
+	{
+		.name = "wmark_high",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.private = MEMFILE_PRIVATE(_MEM, WMARK_HIGH_LIMIT),
+		.read_u64 = mem_cgroup_read_u64,
+	},
+	{
+		.name = "wmark_low",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.private = MEMFILE_PRIVATE(_MEM, WMARK_LOW_LIMIT),
+		.read_u64 = mem_cgroup_read_u64,
 	},
 #ifdef CONFIG_MEMSLI
 	{

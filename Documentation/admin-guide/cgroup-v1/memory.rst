@@ -126,6 +126,9 @@ Brief summary of control files.
  memory.wmark_low                    low limit (memory usage low water mark,
                          read-only)
  memory.wmark_high                   high limit (memory usge high water mark,
+ memory.wmark_scale_factor          the gap between wmark_low and wmark_high,
+                  percentage of max limit, default is 50 or 0.5% of max limit.
+                  The max value is 1000 or 10% of max limit.
 ==================================== ==========================================
 
 1. History

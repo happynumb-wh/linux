@@ -2209,6 +2209,12 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.private = MEMFILE_PRIVATE(_MEM, WMARK_LOW_LIMIT),
 		.read_u64 = mem_cgroup_read_u64,
 	},
+	{
+		.name = "wmark_scale_factor",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memory_wmark_scale_factor_show,
+		.write = memory_wmark_scale_factor_write,
+	},
 #ifdef CONFIG_MEMSLI
 	{
 		.name = "direct_reclaim_global_latency",

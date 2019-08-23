@@ -30,6 +30,9 @@ struct obj_cgroup;
 struct page;
 struct mm_struct;
 struct kmem_cache;
+struct oom_control;
+
+#define MEMCG_OOM_PRIORITY 12
 
 /* Cgroup-specific page state, on top of universal node page state */
 enum memcg_stat_item {
@@ -365,6 +368,11 @@ struct mem_cgroup {
 	struct mutex lat_stat_notify_lock;
 #endif
 #endif
+	/* memcg oom priority */
+	bool use_priority_oom;
+	int priority;
+	int num_oom_skip;
+	struct mem_cgroup *next_reset;
 
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)
@@ -929,6 +937,33 @@ static inline bool mem_cgroup_online(struct mem_cgroup *memcg)
 	return css_is_online(&memcg->css);
 }
 
+/* memcg oom priority*/
+void mem_cgroup_account_oom_skip(struct task_struct *task,
+				 struct oom_control *oc);
+
+void mem_cgroup_select_bad_process(struct oom_control *oc);
+
+static inline bool root_memcg_use_priority_oom(void)
+{
+	if (mem_cgroup_disabled())
+		return false;
+	if (root_mem_cgroup->use_priority_oom)
+		return true;
+	return false;
+}
+
+extern u64 mem_cgroup_priority_oom_read(struct cgroup_subsys_state *css,
+					struct cftype *cft);
+
+extern int mem_cgroup_priority_oom_write(struct cgroup_subsys_state *css,
+					 struct cftype *cft, u64 val);
+
+extern u64 mem_cgroup_priority_read(struct cgroup_subsys_state *css,
+				    struct cftype *cft);
+
+extern int mem_cgroup_priority_write(struct cgroup_subsys_state *css,
+				     struct cftype *cft, u64 val);
+
 void mem_cgroup_update_lru_size(struct lruvec *lruvec, enum lru_list lru,
 		int zid, long nr_pages);
 
@@ -1358,6 +1393,21 @@ static inline struct mem_cgroup *lruvec_memcg(struct lruvec *lruvec)
 static inline bool mem_cgroup_online(struct mem_cgroup *memcg)
 {
 	return true;
+}
+
+/* memcg priority */
+static inline void mem_cgroup_account_oom_skip(struct task_struct *task,
+		struct oom_control *oc)
+{
+}
+
+static inline void mem_cgroup_select_bad_process(struct oom_control *oc)
+{
+}
+
+static inline bool root_memcg_use_priority_oom(void)
+{
+	return false;
 }
 
 static inline

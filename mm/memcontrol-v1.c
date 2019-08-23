@@ -2307,6 +2307,17 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.write = mem_cgroup_reset,
 		.read_u64 = mem_cgroup_read_u64,
 	},
+	{
+		.name = "use_priority_oom",
+		.write_u64 = mem_cgroup_priority_oom_write,
+		.read_u64 = mem_cgroup_priority_oom_read,
+	},
+	{
+		.name = "priority",
+		.read_u64 = mem_cgroup_priority_read,
+		.write_u64 = mem_cgroup_priority_write,
+		.flags = CFTYPE_NOT_ON_ROOT,
+	},
 	{ },	/* terminate */
 };
 

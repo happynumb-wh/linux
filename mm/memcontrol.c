@@ -2506,6 +2506,8 @@ static void reclaim_wmark(struct mem_cgroup *memcg)
 {
 	long nr_pages;
 	unsigned long pflags;
+	struct mem_cgroup *iter;
+	u64 start, duration;
 
 	if (is_wmark_ok(memcg, false))
 		return;
@@ -2517,12 +2519,26 @@ static void reclaim_wmark(struct mem_cgroup *memcg)
 
 	nr_pages = max_t(unsigned long, SWAP_CLUSTER_MAX, nr_pages);
 
+	/*
+	 * Typically, we would like to record the actual cpu% of reclaim_wmark
+	 * work, excluding any sleep/resched time.  However, currently we just
+	 * simply record the whole duration of reclaim_wmark work for the
+	 * overhead-accuracy trade-off.
+	 */
+	start = ktime_get_ns();
 	psi_memstall_enter(&pflags);
 	try_to_free_mem_cgroup_pages(memcg, nr_pages,
 				     GFP_KERNEL,
 				     MEMCG_RECLAIM_MAY_SWAP,
 				     NULL);
 	psi_memstall_leave(&pflags);
+	duration = ktime_get_ns() - start;
+
+	css_get(&memcg->css);
+	for (iter = memcg; iter; iter = parent_mem_cgroup(iter))
+		this_cpu_add(iter->exstat_cpu->item[MEMCG_WMARK_RECLAIM],
+			     duration);
+	css_put(&memcg->css);
 }
 
 static void wmark_work_func(struct work_struct *work)
@@ -2534,6 +2550,28 @@ static void wmark_work_func(struct work_struct *work)
 	current->flags |= PF_MEMALLOC | PF_KSWAPD;
 	reclaim_wmark(memcg);
 	current->flags &= ~(PF_MEMALLOC | PF_KSWAPD);
+}
+
+static u64 memcg_exstat_gather(struct mem_cgroup *memcg,
+			       enum memcg_exstat_item idx)
+{
+	u64 sum = 0;
+	int cpu;
+
+	for_each_online_cpu(cpu)
+		sum += per_cpu_ptr(memcg->exstat_cpu, cpu)->item[idx];
+
+	return sum;
+}
+
+int memcg_exstat_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(seq_css(m));
+
+	seq_printf(m, "wmark_reclaim_work_ms %llu\n",
+		   memcg_exstat_gather(memcg, MEMCG_WMARK_RECLAIM) >> 20);
+
+	return 0;
 }
 
 static unsigned long reclaim_high(struct mem_cgroup *memcg,
@@ -4211,6 +4249,7 @@ static void __mem_cgroup_free(struct mem_cgroup *memcg)
 	memcg1_free_events(memcg);
 	kfree(memcg->vmstats);
 	free_percpu(memcg->vmstats_percpu);
+	free_percpu(memcg->exstat_cpu);
 #ifdef CONFIG_MEMSLI
 	free_percpu(memcg->lat_stat_cpu);
 #endif
@@ -4250,6 +4289,10 @@ static struct mem_cgroup *mem_cgroup_alloc(struct mem_cgroup *parent)
 	memcg->vmstats_percpu = alloc_percpu_gfp(struct memcg_vmstats_percpu,
 						 GFP_KERNEL_ACCOUNT);
 	if (!memcg->vmstats_percpu)
+		goto fail;
+
+	memcg->exstat_cpu = alloc_percpu(struct mem_cgroup_exstat_cpu);
+	if (!memcg->exstat_cpu)
 		goto fail;
 
 #ifdef CONFIG_MEMSLI
@@ -5438,6 +5481,10 @@ static struct cftype memory_files[] = {
 		.seq_show =  memcg_lat_stat_show,
 	},
 #endif /* CONFIG_MEMSLI */
+	{
+		.name = "exstat",
+		.seq_show = memcg_exstat_show,
+	},
 #ifdef CONFIG_NUMA
 	{
 		.name = "numa_stat",

@@ -2192,6 +2192,10 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.seq_show = memory_stat_show,
 	},
 	{
+		.name = "exstat",
+		.seq_show = memcg_exstat_show,
+	},
+	{
 		.name = "wmark_ratio",
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.seq_show = memory_wmark_ratio_show,

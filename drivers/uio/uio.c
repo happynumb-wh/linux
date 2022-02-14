@@ -12,6 +12,8 @@
  * Base Functions
  */
 
+#include <linux/completion.h>
+#include <linux/percpu-refcount.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/poll.h>
@@ -219,7 +221,9 @@ static ssize_t name_show(struct device *dev,
 	struct uio_device *idev = dev_get_drvdata(dev);
 	int ret;
 
-	mutex_lock(&idev->info_lock);
+	if (!percpu_ref_tryget_live(&idev->info_ref))
+		return -EINVAL;
+
 	if (!idev->info) {
 		ret = -EINVAL;
 		dev_err(dev, "the device has been unregistered\n");
@@ -229,7 +233,7 @@ static ssize_t name_show(struct device *dev,
 	ret = sprintf(buf, "%s\n", idev->info->name);
 
 out:
-	mutex_unlock(&idev->info_lock);
+	percpu_ref_put(&idev->info_ref);
 	return ret;
 }
 static DEVICE_ATTR_RO(name);
@@ -240,7 +244,9 @@ static ssize_t version_show(struct device *dev,
 	struct uio_device *idev = dev_get_drvdata(dev);
 	int ret;
 
-	mutex_lock(&idev->info_lock);
+	if (!percpu_ref_tryget_live(&idev->info_ref))
+		return -EINVAL;
+
 	if (!idev->info) {
 		ret = -EINVAL;
 		dev_err(dev, "the device has been unregistered\n");
@@ -250,7 +256,7 @@ static ssize_t version_show(struct device *dev,
 	ret = sprintf(buf, "%s\n", idev->info->version);
 
 out:
-	mutex_unlock(&idev->info_lock);
+	percpu_ref_put(&idev->info_ref);
 	return ret;
 }
 static DEVICE_ATTR_RO(version);
@@ -504,16 +510,20 @@ static int uio_open(struct inode *inode, struct file *filep)
 	listener->event_count = atomic_read(&idev->event);
 	filep->private_data = listener;
 
-	mutex_lock(&idev->info_lock);
+	if (!percpu_ref_tryget_live(&idev->info_ref)) {
+		ret = -EINVAL;
+		goto err_infoopen;
+	}
+
 	if (!idev->info) {
-		mutex_unlock(&idev->info_lock);
+		percpu_ref_put(&idev->info_ref);
 		ret = -EINVAL;
 		goto err_infoopen;
 	}
 
 	if (idev->info->open)
 		ret = idev->info->open(idev->info, inode);
-	mutex_unlock(&idev->info_lock);
+	percpu_ref_put(&idev->info_ref);
 	if (ret)
 		goto err_infoopen;
 
@@ -546,10 +556,12 @@ static int uio_release(struct inode *inode, struct file *filep)
 	struct uio_listener *listener = filep->private_data;
 	struct uio_device *idev = listener->dev;
 
-	mutex_lock(&idev->info_lock);
+	if (!percpu_ref_tryget_live(&idev->info_ref))
+		return -EINVAL;
+
 	if (idev->info && idev->info->release)
 		ret = idev->info->release(idev->info, inode);
-	mutex_unlock(&idev->info_lock);
+	percpu_ref_put(&idev->info_ref);
 
 	module_put(idev->owner);
 	kfree(listener);
@@ -563,10 +575,12 @@ static __poll_t uio_poll(struct file *filep, poll_table *wait)
 	struct uio_device *idev = listener->dev;
 	__poll_t ret = 0;
 
-	mutex_lock(&idev->info_lock);
+	if (!percpu_ref_tryget_live(&idev->info_ref))
+		return -EINVAL;
+
 	if (!idev->info || !idev->info->irq)
 		ret = EPOLLERR;
-	mutex_unlock(&idev->info_lock);
+	percpu_ref_put(&idev->info_ref);
 
 	if (ret)
 		return ret;
@@ -592,13 +606,17 @@ static ssize_t uio_read(struct file *filep, char __user *buf,
 	add_wait_queue(&idev->wait, &wait);
 
 	do {
-		mutex_lock(&idev->info_lock);
-		if (!idev->info || !idev->info->irq) {
-			retval = -EIO;
-			mutex_unlock(&idev->info_lock);
+		if (!percpu_ref_tryget_live(&idev->info_ref)) {
+			retval = -EINVAL;
 			break;
 		}
-		mutex_unlock(&idev->info_lock);
+
+		if (!idev->info || !idev->info->irq) {
+			retval = -EIO;
+			percpu_ref_put(&idev->info_ref);
+			break;
+		}
+		percpu_ref_put(&idev->info_ref);
 
 		set_current_state(TASK_INTERRUPTIBLE);
 
@@ -646,7 +664,9 @@ static ssize_t uio_write(struct file *filep, const char __user *buf,
 	if (copy_from_user(&irq_on, buf, count))
 		return -EFAULT;
 
-	mutex_lock(&idev->info_lock);
+	if (!percpu_ref_tryget_live(&idev->info_ref))
+		return -EINVAL;
+
 	if (!idev->info) {
 		retval = -EINVAL;
 		goto out;
@@ -665,7 +685,7 @@ static ssize_t uio_write(struct file *filep, const char __user *buf,
 	retval = idev->info->irqcontrol(idev->info, irq_on);
 
 out:
-	mutex_unlock(&idev->info_lock);
+	percpu_ref_put(&idev->info_ref);
 	return retval ? retval : sizeof(s32);
 }
 
@@ -690,7 +710,9 @@ static vm_fault_t uio_vma_fault(struct vm_fault *vmf)
 	vm_fault_t ret = 0;
 	int mi;
 
-	mutex_lock(&idev->info_lock);
+	if (!percpu_ref_tryget_live(&idev->info_ref))
+		return VM_FAULT_SIGBUS;
+
 	if (!idev->info) {
 		ret = VM_FAULT_SIGBUS;
 		goto out;
@@ -717,8 +739,7 @@ static vm_fault_t uio_vma_fault(struct vm_fault *vmf)
 	vmf->page = page;
 
 out:
-	mutex_unlock(&idev->info_lock);
-
+	percpu_ref_put(&idev->info_ref);
 	return ret;
 }
 
@@ -830,7 +851,9 @@ static int uio_mmap(struct file *filep, struct vm_area_struct *vma)
 
 	vma->vm_private_data = idev;
 
-	mutex_lock(&idev->info_lock);
+	if (!percpu_ref_tryget_live(&idev->info_ref))
+		return -EINVAL;
+
 	if (!idev->info) {
 		ret = -EINVAL;
 		goto out;
@@ -878,7 +901,7 @@ static int uio_mmap(struct file *filep, struct vm_area_struct *vma)
 	}
 
  out:
-	mutex_unlock(&idev->info_lock);
+	percpu_ref_put(&idev->info_ref);
 	return ret;
 }
 
@@ -888,7 +911,8 @@ static long uio_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct uio_device *idev = listener->dev;
 	long retval = 0;
 
-	mutex_lock(&idev->info_lock);
+	if (!percpu_ref_tryget_live(&idev->info_ref))
+		return -EINVAL;
 
 	if (!idev->info || !idev->info->ioctl) {
 		retval = -EINVAL;
@@ -897,7 +921,7 @@ static long uio_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	retval = idev->info->ioctl(idev->info, cmd, arg);
 out:
-	mutex_unlock(&idev->info_lock);
+	percpu_ref_put(&idev->info_ref);
 	return retval;
 }
 
@@ -992,8 +1016,17 @@ static void uio_device_release(struct device *dev)
 {
 	struct uio_device *idev = dev_get_drvdata(dev);
 
+	percpu_ref_exit(&idev->info_ref);
 	kfree(idev);
 }
+
+static void uio_info_free(struct percpu_ref *ref)
+{
+	struct uio_device *idev = container_of(ref, struct uio_device, info_ref);
+
+	complete(&idev->free_done);
+}
+
 
 /**
  * __uio_register_device - register a new userspace IO device
@@ -1025,12 +1058,21 @@ int __uio_register_device(struct module *owner,
 
 	idev->owner = owner;
 	idev->info = info;
-	mutex_init(&idev->info_lock);
 	init_waitqueue_head(&idev->wait);
 	atomic_set(&idev->event, 0);
 
+	ret = percpu_ref_init(&idev->info_ref, uio_info_free, 0, GFP_KERNEL);
+	if (ret) {
+		pr_err("percpu_ref init failed!\n");
+		kfree(idev);
+		return ret;
+	}
+	init_completion(&idev->confirm_done);
+	init_completion(&idev->free_done);
+
 	ret = uio_get_minor(idev);
 	if (ret) {
+		percpu_ref_exit(&idev->info_ref);
 		kfree(idev);
 		return ret;
 	}
@@ -1124,6 +1166,13 @@ int __devm_uio_register_device(struct module *owner,
 }
 EXPORT_SYMBOL_GPL(__devm_uio_register_device);
 
+static void uio_confirm_info(struct percpu_ref *ref)
+{
+	struct uio_device *idev = container_of(ref, struct uio_device, info_ref);
+
+	complete(&idev->confirm_done);
+}
+
 /**
  * uio_unregister_device - unregister a industrial IO device
  * @info:	UIO device capabilities
@@ -1140,14 +1189,16 @@ void uio_unregister_device(struct uio_info *info)
 	idev = info->uio_dev;
 	minor = idev->minor;
 
-	mutex_lock(&idev->info_lock);
+	percpu_ref_kill_and_confirm(&idev->info_ref, uio_confirm_info);
+	wait_for_completion(&idev->confirm_done);
+	wait_for_completion(&idev->free_done);
+	/* now, we can set info to NULL */
 	uio_dev_del_attributes(idev);
 
 	if (info->irq && info->irq != UIO_IRQ_CUSTOM)
 		free_irq(info->irq, idev);
 
 	idev->info = NULL;
-	mutex_unlock(&idev->info_lock);
 
 	wake_up_interruptible(&idev->wait);
 	kill_fasync(&idev->async_queue, SIGIO, POLL_HUP);

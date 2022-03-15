@@ -149,6 +149,7 @@ struct tcmu_dev {
 	size_t mmap_pages;
 
 	struct mutex cmdr_lock;
+	struct rw_semaphore i_mmap_sem;
 	struct list_head qfull_queue;
 	struct list_head tmr_queue;
 
@@ -1825,6 +1826,7 @@ static struct se_device *tcmu_alloc_device(struct se_hba *hba, const char *name)
 	mutex_init(&udev->cmdr_lock);
 	udev->read_zc_size = 0;
 	udev->write_zc_size = 0;
+	init_rwsem(&udev->i_mmap_sem);
 
 	INIT_LIST_HEAD(&udev->node);
 	INIT_LIST_HEAD(&udev->timedout_entry);
@@ -2043,12 +2045,12 @@ static struct page *tcmu_try_get_data_page(struct tcmu_dev *udev, uint32_t dpi)
 {
 	struct page *page;
 
-	mutex_lock(&udev->cmdr_lock);
+	down_read(&udev->i_mmap_sem);
 	page = xa_load(&udev->data_pages, dpi);
 	if (likely(page)) {
 		get_page(page);
 		lock_page(page);
-		mutex_unlock(&udev->cmdr_lock);
+		up_read(&udev->i_mmap_sem);
 		return page;
 	}
 
@@ -2058,7 +2060,7 @@ static struct page *tcmu_try_get_data_page(struct tcmu_dev *udev, uint32_t dpi)
 	 */
 	pr_err("Invalid addr to data page mapping (dpi %u) on device %s\n",
 	       dpi, udev->name);
-	mutex_unlock(&udev->cmdr_lock);
+	up_read(&udev->i_mmap_sem);
 
 	return NULL;
 }
@@ -3768,6 +3770,7 @@ static void find_free_blocks(void)
 			continue;
 		}
 
+		down_write(&udev->i_mmap_sem);
 		end = udev->dbi_max + 1;
 		block = find_last_bit(udev->data_bitmap, end);
 		if (block == udev->dbi_max) {
@@ -3775,6 +3778,7 @@ static void find_free_blocks(void)
 			 * The last bit is dbi_max, so it is not possible
 			 * reclaim any blocks.
 			 */
+			up_write(&udev->i_mmap_sem);
 			mutex_unlock(&udev->cmdr_lock);
 			continue;
 		} else if (block == end) {
@@ -3802,6 +3806,7 @@ static void find_free_blocks(void)
 		off = udev->data_off + (loff_t)start * udev->data_blk_size;
 		unmap_mapping_range(udev->inode->i_mapping, off, 0, 1);
 
+		up_write(&udev->i_mmap_sem);
 		mutex_unlock(&udev->cmdr_lock);
 
 		total_pages_freed += pages_freed;

@@ -74,6 +74,7 @@ struct tcmu_cmd_entry_hdr {
 	__u32 len_op;
 	__u16 cmd_id;
 #define TCMU_KFLAG_ZERO_COPY  0x1
+#define TCMU_KFLAG_BYPASS_DATA_AREA 0x2
 	__u8 kflags;
 #define TCMU_UFLAG_UNKNOWN_OP 0x1
 #define TCMU_UFLAG_READ_LEN   0x2

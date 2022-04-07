@@ -6557,6 +6557,51 @@ static int watermark_scale_factor_sysctl_handler(const struct ctl_table *table, 
 	return 0;
 }
 
+static void setup_min_cache_kbytes(void)
+{
+	pg_data_t *pgdat;
+	struct zone *zone;
+	unsigned long lowmem_pages = 0;
+	unsigned long min_cache_pages = sysctl_min_cache_kbytes >> (PAGE_SHIFT - 10);
+
+	for_each_online_pgdat(pgdat)
+		pgdat->min_cache_pages = 0;
+
+	for_each_zone(zone) {
+		if (!is_highmem(zone))
+			lowmem_pages += zone_managed_pages(zone);
+	}
+
+	for_each_zone(zone) {
+		u64 tmp;
+
+		/*
+		 * Make sure that lowmem zone reserve a mount of file pages
+		 * to avoid thrashing. highmem zone is allowed to eat up
+		 * memory as soon as possible.
+		 */
+		if (!is_highmem(zone)) {
+			tmp = zone_managed_pages(zone) * min_cache_pages;
+			do_div(tmp, lowmem_pages);
+			zone->zone_pgdat->min_cache_pages += tmp;
+		}
+	}
+}
+
+static int sysctl_min_cache_kbytes_sysctl_handler(const struct ctl_table *table, int write,
+	void __user *buffer, size_t *length, loff_t *ppos)
+{
+	int rc;
+
+	rc = proc_doulongvec_minmax(table, write, buffer, length, ppos);
+	if (rc)
+		return rc;
+
+	setup_min_cache_kbytes();
+
+	return 0;
+}
+
 #ifdef CONFIG_NUMA
 static void setup_min_unmapped_ratio(void)
 {
@@ -6734,6 +6779,14 @@ static const struct ctl_table page_alloc_sysctl_table[] = {
 		.maxlen		= sizeof(sysctl_lowmem_reserve_ratio),
 		.mode		= 0644,
 		.proc_handler	= lowmem_reserve_ratio_sysctl_handler,
+	},
+	{
+		.procname	= "min_cache_kbytes",
+		.data		= &sysctl_min_cache_kbytes,
+		.maxlen		= sizeof(sysctl_min_cache_kbytes),
+		.mode		= 0644,
+		.proc_handler	= sysctl_min_cache_kbytes_sysctl_handler,
+		.extra1		= SYSCTL_LONG_ZERO,
 	},
 #ifdef CONFIG_NUMA
 	{

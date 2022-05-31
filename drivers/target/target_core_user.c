@@ -195,6 +195,8 @@ struct tcmu_cmd {
 #define TCMU_CMD_BIT_EXPIRED 0
 #define TCMU_CMD_BIT_KEEP_BUF 1
 	unsigned long flags;
+
+	struct mutex cmd_lock;
 };
 
 struct tcmu_tmr {
@@ -644,6 +646,7 @@ static struct tcmu_cmd *tcmu_alloc_cmd(struct se_cmd *se_cmd)
 	INIT_LIST_HEAD(&tcmu_cmd->queue_entry);
 	tcmu_cmd->se_cmd = se_cmd;
 	tcmu_cmd->tcmu_dev = udev;
+	mutex_init(&tcmu_cmd->cmd_lock);
 
 	if (!test_bit(TCMU_DEV_BIT_BYPASS_DATA_AREA, &udev->flags)) {
 		tcmu_cmd_set_block_cnts(tcmu_cmd);
@@ -1533,11 +1536,13 @@ static void tcmu_check_expired_ring_cmd(struct tcmu_cmd *cmd)
 	if (!time_after_eq(jiffies, cmd->deadline))
 		return;
 
+	mutex_lock(&cmd->cmd_lock);
 	set_bit(TCMU_CMD_BIT_EXPIRED, &cmd->flags);
 	list_del_init(&cmd->queue_entry);
 	se_cmd = cmd->se_cmd;
 	se_cmd->priv = NULL;
 	cmd->se_cmd = NULL;
+	mutex_unlock(&cmd->cmd_lock);
 
 	pr_debug("Timing out inflight cmd %u on dev %s.\n",
 		 cmd->cmd_id, cmd->tcmu_dev->name);
@@ -2081,15 +2086,14 @@ static long tcmu_bypass_data_area_copy_data(struct tcmu_dev *udev,
 	if (copy_from_user(&xfer, uxfer, sizeof(xfer)))
 		return -EFAULT;
 
-	mutex_lock(&udev->cmdr_lock);
 	tcmu_cmd = xa_load(&udev->commands, xfer.cmd_id);
 	if (!tcmu_cmd) {
 		pr_err("Can not find tcmu command, cmd_id:%d\n", xfer.cmd_id);
 		set_bit(TCMU_DEV_BIT_BROKEN, &udev->flags);
-		ret = -EFAULT;
-		goto out;
+		return -EFAULT;
 	}
 
+	mutex_lock(&tcmu_cmd->cmd_lock);
 	if (test_bit(TCMU_CMD_BIT_EXPIRED, &tcmu_cmd->flags)) {
 		pr_err("Command is expired, cmd_id:%d\n", xfer.cmd_id);
 		ret = -EFAULT;
@@ -2099,7 +2103,7 @@ static long tcmu_bypass_data_area_copy_data(struct tcmu_dev *udev,
 	ret = tcmu_do_copy_data(tcmu_cmd, xfer.iovec,
 				xfer.iov_cnt, is_copy_to_sgl);
 out:
-	mutex_unlock(&udev->cmdr_lock);
+	mutex_unlock(&tcmu_cmd->cmd_lock);
 	return ret;
 }
 

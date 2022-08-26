@@ -429,7 +429,7 @@ static int ovl_lower_dir(const char *name, const struct path *path,
 	     (ofs->config.index && ofs->config.upperdir)) && !fh_type) {
 		ofs->config.index = false;
 		ofs->config.nfs_export = false;
-		pr_warn("fs on '%s' does not support file handles, falling back to index=off,nfs_export=off.\n",
+		pr_warn_ratelimited("fs on '%s' does not support file handles, falling back to index=off,nfs_export=off.\n",
 			name);
 	}
 	ofs->nofh |= !fh_type;
@@ -487,11 +487,11 @@ static int ovl_setup_trap(struct super_block *sb, struct dentry *dir,
 static int ovl_report_in_use(struct ovl_fs *ofs, const char *name)
 {
 	if (ofs->config.index) {
-		pr_err("%s is in-use as upperdir/workdir of another mount, mount with '-o index=off' to override exclusive upperdir protection.\n",
+		pr_err_ratelimited("%s is in-use as upperdir/workdir of another mount, mount with '-o index=off' to override exclusive upperdir protection.\n",
 		       name);
 		return -EBUSY;
 	} else {
-		pr_warn("%s is in-use as upperdir/workdir of another mount, accessing files from both mounts will result in undefined behavior.\n",
+		pr_warn_ratelimited("%s is in-use as upperdir/workdir of another mount, accessing files from both mounts will result in undefined behavior.\n",
 			name);
 		return 0;
 	}

@@ -6592,12 +6592,22 @@ static int sysctl_min_cache_kbytes_sysctl_handler(const struct ctl_table *table,
 	void __user *buffer, size_t *length, loff_t *ppos)
 {
 	int rc;
+	unsigned long min_cache_pages;
+	unsigned long old_min_cache_kbytes = sysctl_min_cache_kbytes;
 
 	rc = proc_doulongvec_minmax(table, write, buffer, length, ppos);
 	if (rc)
 		return rc;
 
-	setup_min_cache_kbytes();
+	if (write) {
+		min_cache_pages = sysctl_min_cache_kbytes >> (PAGE_SHIFT - 10);
+		if (min_cache_pages > totalram_pages() / 2) {
+			sysctl_min_cache_kbytes = old_min_cache_kbytes;
+			return -EINVAL;
+		}
+
+		setup_min_cache_kbytes();
+	}
 
 	return 0;
 }

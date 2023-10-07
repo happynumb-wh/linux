@@ -141,4 +141,15 @@ static inline void memcg1_uncharge_skmem(struct mem_cgroup *memcg, unsigned int 
 
 #endif	/* CONFIG_MEMCG_V1 */
 
+#ifdef CONFIG_PGTABLE_BIND
+u64 memcg_pgtable_bind_read(struct cgroup_subsys_state *css,
+			   struct cftype *cft);
+int memcg_pgtable_bind_write(struct cgroup_subsys_state *css,
+			    struct cftype *cft, u64 val);
+u64 memcg_pgtable_misplaced_read(struct cgroup_subsys_state *css,
+				struct cftype *cft);
+int memcg_pgtable_misplaced_write(struct cgroup_subsys_state *css,
+				 struct cftype *cft, u64 val);
+#endif
+
 #endif	/* __MM_MEMCONTROL_V1_H */

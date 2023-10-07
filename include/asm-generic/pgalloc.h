@@ -2,10 +2,44 @@
 #ifndef __ASM_GENERIC_PGALLOC_H
 #define __ASM_GENERIC_PGALLOC_H
 
+#include <linux/memcontrol.h>
+#include <linux/pgtable_bind.h>
+
 #ifdef CONFIG_MMU
 
 #define GFP_PGTABLE_KERNEL	(GFP_KERNEL | __GFP_ZERO | __GFP_NOKFENCE)
 #define GFP_PGTABLE_USER	(GFP_PGTABLE_KERNEL | __GFP_ACCOUNT)
+
+#ifdef CONFIG_PGTABLE_BIND
+static gfp_t gfp_pgtable_alloc(struct mm_struct *mm, gfp_t gfp)
+{
+	struct mem_cgroup *memcg;
+	bool pgtable_alloc = false;
+
+	if (pgtable_stat_enabled()) {
+		memcg = get_mem_cgroup_from_mm(mm);
+		if (memcg) {
+			pgtable_alloc = memcg->allow_pgtable_bind;
+			css_put(&memcg->css);
+		}
+
+		/* Only target on user processes */
+		if (pgtable_alloc) {
+			gfp |= __GFP_PGTABLE;
+
+			if (pgtable_bind_enabled())
+				gfp |= __GFP_HIGH | __GFP_THISNODE;
+		}
+	}
+
+	return gfp;
+}
+#else
+static gfp_t gfp_pgtable_alloc(struct mm_struct *mm, gfp_t gfp)
+{
+	return gfp;
+}
+#endif
 
 /**
  * __pte_alloc_one_kernel - allocate memory for a PTE-level kernel page table
@@ -73,6 +107,8 @@ static inline pgtable_t __pte_alloc_one_noprof(struct mm_struct *mm, gfp_t gfp)
 {
 	struct ptdesc *ptdesc;
 
+	gfp = gfp_pgtable_alloc(mm, gfp);
+
 	ptdesc = pagetable_alloc_noprof(gfp, 0);
 	if (!ptdesc)
 		return NULL;
@@ -138,6 +174,8 @@ static inline pmd_t *pmd_alloc_one_noprof(struct mm_struct *mm, unsigned long ad
 	struct ptdesc *ptdesc;
 	gfp_t gfp = GFP_PGTABLE_USER;
 
+	gfp = gfp_pgtable_alloc(mm, gfp);
+
 	if (mm == &init_mm)
 		gfp = GFP_PGTABLE_KERNEL;
 	ptdesc = pagetable_alloc_noprof(gfp, 0);
@@ -174,6 +212,8 @@ static inline pud_t *__pud_alloc_one_noprof(struct mm_struct *mm, unsigned long 
 {
 	gfp_t gfp = GFP_PGTABLE_USER;
 	struct ptdesc *ptdesc;
+
+	gfp = gfp_pgtable_alloc(mm, gfp);
 
 	if (mm == &init_mm)
 		gfp = GFP_PGTABLE_KERNEL;

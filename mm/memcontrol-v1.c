@@ -2372,6 +2372,18 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.write = memcg_lru_gen_write,
 	},
 #endif
+#ifdef CONFIG_PGTABLE_BIND
+	{
+		.name = "pgtable_bind",
+		.write_u64 = memcg_pgtable_bind_write,
+		.read_u64 = memcg_pgtable_bind_read,
+	},
+	{
+		.name = "pgtable_misplaced",
+		.write_u64 = memcg_pgtable_misplaced_write,
+		.read_u64 = memcg_pgtable_misplaced_read,
+	},
+#endif
 #ifdef CONFIG_PRE_OOM
 	{
 		.name = "pre_oom",

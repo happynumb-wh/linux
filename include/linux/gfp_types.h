@@ -59,6 +59,9 @@ enum {
 #ifdef CONFIG_KFENCE
 	___GFP_NOKFENCE_BIT,
 #endif
+#ifdef CONFIG_PGTABLE_BIND
+	___GFP_PGTABLE_BIT,
+#endif
 	___GFP_LAST_BIT
 };
 
@@ -105,6 +108,12 @@ enum {
 #else
 #define ___GFP_NOKFENCE         0
 #endif
+#ifdef CONFIG_PGTABLE_BIND
+#define ___GFP_PGTABLE		BIT(___GFP_PGTABLE_BIT)
+#else
+#define ___GFP_PGTABLE		0
+#endif
+/* If the above are modified, __GFP_BITS_SHIFT may need updating */
 
 /*
  * Physical address zone modifiers (see linux/mmzone.h - low four bits)
@@ -151,6 +160,8 @@ enum {
  * with this flag to indicate that their NULL tags are expected and normal.
  *
  * %__GFP_NOKFENCE informs DO NOT try to alloc page from kfence pool.
+ * %__GFP_PGTABLE indicates the allocation of page table pages.
+ *
  */
 #define __GFP_RECLAIMABLE ((__force gfp_t)___GFP_RECLAIMABLE)
 #define __GFP_WRITE	((__force gfp_t)___GFP_WRITE)
@@ -159,6 +170,7 @@ enum {
 #define __GFP_ACCOUNT	((__force gfp_t)___GFP_ACCOUNT)
 #define __GFP_NO_OBJ_EXT   ((__force gfp_t)___GFP_NO_OBJ_EXT)
 #define __GFP_NOKFENCE	((__force gfp_t)___GFP_NOKFENCE)
+#define __GFP_PGTABLE	((__force gfp_t)___GFP_PGTABLE)
 
 /**
  * DOC: Watermark modifiers

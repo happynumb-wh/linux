@@ -10,6 +10,8 @@
 #include <linux/gfp.h>
 #include <linux/highmem.h>
 #include <linux/slab.h>
+#include <linux/memcontrol.h>
+#include <linux/pgtable_bind.h>
 
 #include <asm/pgalloc.h>
 #include <asm/page.h>
@@ -31,7 +33,26 @@ static bool pgdir_is_page_size(void)
 pgd_t *pgd_alloc(struct mm_struct *mm)
 {
 	gfp_t gfp = GFP_PGTABLE_USER;
+#ifdef CONFIG_PGTABLE_BIND
+	struct mem_cgroup *memcg;
+	bool pgtable_alloc = false;
 
+	if (pgtable_stat_enabled()) {
+		memcg = get_mem_cgroup_from_mm(mm);
+		if (memcg) {
+			pgtable_alloc = memcg->allow_pgtable_bind;
+			css_put(&memcg->css);
+		}
+
+		/* Only target on user processes */
+		if (pgtable_alloc) {
+			gfp |= __GFP_PGTABLE;
+
+			if (pgtable_bind_enabled())
+				gfp |= __GFP_HIGH | __GFP_THISNODE;
+		}
+	}
+#endif
 	if (pgdir_is_page_size())
 		return __pgd_alloc(mm, 0);
 	else

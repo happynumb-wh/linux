@@ -3971,6 +3971,24 @@ try_this_zone:
 		if (page) {
 			prep_new_page(page, order, gfp_mask, alloc_flags);
 
+#ifdef CONFIG_PGTABLE_BIND
+			/*
+			 * If allocated page belongs to remote numa node,
+			 * accumulate memcg->pgtable_misplaced to show how many pages
+			 * are from remote node.
+			 */
+			if ((gfp_mask & __GFP_PGTABLE) &&
+			    (zone_to_nid(ac->preferred_zoneref->zone) != zone_to_nid(zone))) {
+				struct mem_cgroup *memcg;
+
+				memcg = get_mem_cgroup_from_mm(current->mm);
+				if (memcg) {
+					memcg->pgtable_misplaced++;
+					css_put(&memcg->css);
+				}
+			}
+#endif
+
 			return page;
 		} else {
 			if (cond_accept_memory(zone, order, alloc_flags))
@@ -5305,6 +5323,16 @@ struct page *__alloc_frozen_pages_noprof(gfp_t gfp, unsigned int order,
 	 * &cpuset_current_mems_allowed to optimize the fast-path attempt.
 	 */
 	ac.nodemask = nodemask;
+
+	/*
+	 * Restore the __GFP_THISNODE restriction if current allocation is page
+	 * table.
+	 */
+	if (gfp & __GFP_PGTABLE) {
+		gfp &= ~__GFP_THISNODE;
+		alloc_gfp &= ~__GFP_THISNODE;
+		ac.zonelist = node_zonelist(preferred_nid, gfp);
+	}
 
 	page = __alloc_pages_slowpath(alloc_gfp, order, &ac);
 

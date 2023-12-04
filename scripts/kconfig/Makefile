@@ -98,6 +98,14 @@ else
 	$(Q)$(MAKE) -f $(srctree)/Makefile $(KBUILD_DEFCONFIG)
 endif
 
+anolis_defconfig: $(obj)/conf
+	$(Q)DIST_DO_GENERATE_DOT_CONFIG=Y DIST_CONFIG_KERNEL_NAME=ANCK $(MAKE) -C $(srctree)/anolis/ dist-defconfig
+	$(Q)$(MAKE) -C $(srctree) olddefconfig
+
+anolis-debug_defconfig: $(obj)/conf
+	$(Q)DIST_DO_GENERATE_DOT_CONFIG=Y DIST_CONFIG_KERNEL_NAME=ANCK $(MAKE) -C $(srctree)/anolis/ dist-debug-defconfig
+	$(Q)$(MAKE) -C $(srctree) olddefconfig
+
 %_defconfig: $(obj)/conf
 	$(Q)$< $(silent) --defconfig=arch/$(SRCARCH)/configs/$@ $(Kconfig)
 
@@ -128,6 +136,8 @@ clean-files += tests/.cache
 # Help text used by make help
 help:
 	@echo  'Configuration targets:'
+	@echo  '  anolis_defconfig       - Generate anolis config for production environment'
+	@echo  '  anolis-debug_defconfig - Generate anolis config for testing environment'
 	@echo  '  config	  - Update current config utilising a line-oriented program'
 	@echo  '  nconfig         - Update current config utilising a ncurses menu based program'
 	@echo  '  menuconfig	  - Update current config utilising a menu based program'

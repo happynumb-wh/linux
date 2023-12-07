@@ -1098,7 +1098,7 @@ static void __init arm64_kfence_map_pool(phys_addr_t kfence_pool, pgd_t *pgdp)
 	/* KFENCE pool needs page-level mapping. */
 	__map_memblock(pgdp, kfence_pool, kfence_pool + kfence_pool_size,
 			pgprot_tagged(PAGE_KERNEL),
-			NO_BLOCK_MAPPINGS | NO_CONT_MAPPINGS);
+			NO_BLOCK_MAPPINGS | NO_CONT_MAPPINGS | NO_EXEC_MAPPINGS);
 	memblock_clear_nomap(kfence_pool, kfence_pool_size);
 	__kfence_pool_early_init = phys_to_virt(kfence_pool);
 }

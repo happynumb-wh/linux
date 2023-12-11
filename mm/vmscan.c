@@ -2623,13 +2623,14 @@ out:
 			/* Scan one type exclusively */
 			if ((scan_balance == SCAN_FILE) != file)
 				scan = 0;
-			else if (sc->file_is_reserved && file)
-				scan = 0;
 			break;
 		default:
 			/* Look ma, no brain */
 			BUG();
 		}
+
+		if (sc->file_is_reserved && file)
+			scan = 0;
 
 		nr[lru] = scan;
 	}

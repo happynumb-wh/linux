@@ -55,6 +55,9 @@ module_param_named(can_queue, tcm_loop_can_queue, uint, 0644);
 static unsigned int tcm_loop_cmd_per_lun = 1024;
 module_param_named(cmd_per_lun, tcm_loop_cmd_per_lun, uint, 0644);
 
+static unsigned short tcm_loop_sg_tablesize = 256;
+module_param_named(sg_tablesize, tcm_loop_sg_tablesize, ushort, 0644);
+
 /*
  * Called from struct target_core_fabric_ops->check_stop_free()
  */
@@ -343,7 +346,6 @@ static const struct scsi_host_template tcm_loop_driver_template = {
 	.eh_device_reset_handler = tcm_loop_device_reset,
 	.eh_target_reset_handler = tcm_loop_target_reset,
 	.this_id		= -1,
-	.sg_tablesize		= 256,
 	.max_sectors		= 0xFFFF,
 	.dma_boundary		= PAGE_SIZE - 1,
 	.module			= THIS_MODULE,
@@ -381,6 +383,7 @@ static int tcm_loop_driver_probe(struct device *dev)
 	sh->nr_hw_queues = tcm_loop_nr_hw_queues;
 	sh->can_queue = tcm_loop_can_queue;
 	sh->cmd_per_lun = tcm_loop_cmd_per_lun;
+	sh->sg_tablesize = tcm_loop_sg_tablesize;
 
 	host_prot = SHOST_DIF_TYPE1_PROTECTION | SHOST_DIF_TYPE2_PROTECTION |
 		    SHOST_DIF_TYPE3_PROTECTION | SHOST_DIX_TYPE1_PROTECTION |

@@ -553,6 +553,27 @@ static ssize_t queue_io_timeout_store(struct gendisk *disk, const char *page,
 	return count;
 }
 
+static ssize_t queue_hang_threshold_show(struct gendisk *disk, char *page)
+{
+	return sysfs_emit(page, "%u\n", READ_ONCE(disk->queue->rq_hang_threshold));
+}
+
+static ssize_t queue_hang_threshold_store(struct gendisk *disk, const char *page,
+				size_t count)
+{
+	unsigned int hang_threshold;
+	int err;
+	struct request_queue *q = disk->queue;
+
+	err = kstrtou32(page, 10, &hang_threshold);
+	if (err || hang_threshold == 0)
+		return -EINVAL;
+
+	blk_queue_rq_hang_threshold(q, hang_threshold);
+
+	return count;
+}
+
 static ssize_t queue_wc_show(struct gendisk *disk, char *page)
 {
 	if (blk_queue_write_cache(disk->queue))
@@ -663,6 +684,7 @@ QUEUE_LIM_RO_ENTRY(queue_dax, "dax");
 QUEUE_RW_ENTRY(queue_io_timeout, "io_timeout");
 QUEUE_LIM_RO_ENTRY(queue_virt_boundary_mask, "virt_boundary_mask");
 QUEUE_LIM_RO_ENTRY(queue_dma_alignment, "dma_alignment");
+QUEUE_RW_ENTRY(queue_hang_threshold, "hang_threshold");
 
 /* legacy alias for logical_block_size: */
 static const struct queue_sysfs_entry queue_hw_sector_size_entry = {
@@ -775,6 +797,7 @@ static const struct attribute *const queue_attrs[] = {
 	&queue_virt_boundary_mask_entry.attr,
 	&queue_dma_alignment_entry.attr,
 	&queue_ra_entry.attr,
+	&queue_hang_threshold_entry.attr,
 
 	/*
 	 * Attributes which don't require locking.

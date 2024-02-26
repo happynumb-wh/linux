@@ -495,6 +495,12 @@ struct blk_independent_access_ranges {
 	struct blk_independent_access_range	ia_range[];
 };
 
+/*
+ * default request hang threshold, unit is millisecond. If one request does
+ * not complete in this threashold time, consider this request as hang.
+ */
+#define BLK_REQ_HANG_THRESHOLD	5000
+
 struct request_queue {
 	/*
 	 * The queue owner gets to use this for whatever they like.
@@ -515,6 +521,7 @@ struct request_queue {
 	unsigned long		queue_flags;
 
 	unsigned int __data_racy rq_timeout;
+	unsigned int		rq_hang_threshold;
 
 	unsigned int		queue_depth;
 
@@ -1169,6 +1176,8 @@ extern int blk_stack_limits(struct queue_limits *t, struct queue_limits *b,
 void queue_limits_stack_bdev(struct queue_limits *t, struct block_device *bdev,
 		sector_t offset, const char *pfx);
 extern void blk_queue_rq_timeout(struct request_queue *, unsigned int);
+extern void blk_queue_rq_hang_threshold(struct request_queue *,
+					unsigned int hang_threshold);
 
 struct blk_independent_access_ranges *
 disk_alloc_independent_access_ranges(struct gendisk *disk, int nr_ia_ranges);

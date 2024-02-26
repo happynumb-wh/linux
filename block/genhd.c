@@ -1120,6 +1120,23 @@ ssize_t part_inflight_show(struct device *dev, struct device_attribute *attr,
 	return sysfs_emit(buf, "%8u %8u\n", inflight[READ], inflight[WRITE]);
 }
 
+ssize_t part_hang_show(struct device *dev, struct device_attribute *attr,
+		       char *buf)
+{
+	struct block_device *bdev = dev_to_bdev(dev);
+	struct request_queue *q = bdev_get_queue(bdev);
+	unsigned int hang[2] = {0, 0};
+
+	/*
+	 * For now, we only support mq device, since don't find a generic method
+	 * to track reqs in single queue device.
+	 */
+	if (queue_is_mq(q))
+		blk_mq_hang_rw(q, bdev, hang);
+
+	return sysfs_emit(buf, "%8u %8u\n", hang[0], hang[1]);
+}
+
 static ssize_t disk_capability_show(struct device *dev,
 				    struct device_attribute *attr, char *buf)
 {
@@ -1170,6 +1187,7 @@ static DEVICE_ATTR(discard_alignment, 0444, disk_discard_alignment_show, NULL);
 static DEVICE_ATTR(capability, 0444, disk_capability_show, NULL);
 static DEVICE_ATTR(stat, 0444, part_stat_show, NULL);
 static DEVICE_ATTR(inflight, 0444, part_inflight_show, NULL);
+static DEVICE_ATTR(hang, 0444, part_hang_show, NULL);
 static DEVICE_ATTR(badblocks, 0644, disk_badblocks_show, disk_badblocks_store);
 static DEVICE_ATTR(diskseq, 0444, diskseq_show, NULL);
 static DEVICE_ATTR(partscan, 0444, partscan_show, NULL);
@@ -1218,6 +1236,7 @@ static struct attribute *disk_attrs[] = {
 	&dev_attr_capability.attr,
 	&dev_attr_stat.attr,
 	&dev_attr_inflight.attr,
+	&dev_attr_hang.attr,
 	&dev_attr_badblocks.attr,
 	&dev_attr_events.attr,
 	&dev_attr_events_async.attr,

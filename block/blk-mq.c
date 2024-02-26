@@ -112,6 +112,34 @@ void blk_mq_in_driver_rw(struct block_device *part, unsigned int inflight[2])
 	inflight[WRITE] = mi.inflight[WRITE];
 }
 
+struct mq_hang {
+	struct block_device *part;
+	unsigned int hang[2];
+};
+
+static bool blk_mq_check_hang(struct request *rq, void *priv)
+{
+	struct mq_hang *mh = priv;
+	u64 now = ktime_get_ns(), duration;
+
+	duration = div_u64(now - rq->start_time_ns, NSEC_PER_MSEC);
+	if ((duration >= READ_ONCE(rq->q->rq_hang_threshold)) &&
+	    (!bdev_partno(mh->part) || rq->part == mh->part))
+		mh->hang[rq_data_dir(rq)]++;
+
+	return true;
+}
+
+void blk_mq_hang_rw(struct request_queue *q, struct block_device *part,
+		unsigned int hang[2])
+{
+	struct mq_hang mh = { .part = part };
+
+	blk_mq_queue_tag_busy_iter(q, blk_mq_check_hang, &mh);
+	hang[0] = mh.hang[0];
+	hang[1] = mh.hang[1];
+}
+
 #ifdef CONFIG_LOCKDEP
 static bool blk_freeze_set_owner(struct request_queue *q,
 				 struct task_struct *owner)

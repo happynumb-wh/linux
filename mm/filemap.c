@@ -1712,8 +1712,10 @@ EXPORT_SYMBOL(folio_end_writeback);
  */
 void __folio_lock(struct folio *folio)
 {
+	task_set_wait_res(TASK_WAIT_FOLIO, folio);
 	folio_wait_bit_common(folio, PG_locked, TASK_UNINTERRUPTIBLE,
 				EXCLUSIVE);
+	task_clear_wait_res();
 }
 EXPORT_SYMBOL(__folio_lock);
 

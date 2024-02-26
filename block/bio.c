@@ -1510,7 +1510,9 @@ EXPORT_SYMBOL_GPL(bio_await);
  */
 int submit_bio_wait(struct bio *bio)
 {
+	task_set_wait_res(TASK_WAIT_BIO, bio);
 	bio_await(bio, NULL, NULL);
+	task_clear_wait_res();
 	return blk_status_to_errno(bio->bi_status);
 }
 EXPORT_SYMBOL(submit_bio_wait);

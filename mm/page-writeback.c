@@ -3063,7 +3063,9 @@ void folio_wait_writeback(struct folio *folio)
 {
 	while (folio_test_writeback(folio)) {
 		trace_folio_wait_writeback(folio, folio_mapping(folio));
+		task_set_wait_res(TASK_WAIT_FOLIO, folio);
 		folio_wait_bit(folio, PG_writeback);
+		task_clear_wait_res();
 	}
 }
 EXPORT_SYMBOL_GPL(folio_wait_writeback);

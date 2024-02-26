@@ -416,8 +416,11 @@ map_bh(struct buffer_head *bh, struct super_block *sb, sector_t block)
 static inline void wait_on_buffer(struct buffer_head *bh)
 {
 	might_sleep();
-	if (buffer_locked(bh))
+	if (buffer_locked(bh)) {
+		task_set_wait_res(TASK_WAIT_FOLIO, bh->b_folio);
 		__wait_on_buffer(bh);
+		task_clear_wait_res();
+	}
 }
 
 static inline int trylock_buffer(struct buffer_head *bh)
@@ -428,8 +431,11 @@ static inline int trylock_buffer(struct buffer_head *bh)
 static inline void lock_buffer(struct buffer_head *bh)
 {
 	might_sleep();
-	if (!trylock_buffer(bh))
+	if (!trylock_buffer(bh)) {
+		task_set_wait_res(TASK_WAIT_FOLIO, bh->b_folio);
 		__lock_buffer(bh);
+		task_clear_wait_res();
+	}
 }
 
 static inline void bh_readahead(struct buffer_head *bh, blk_opf_t op_flags)

@@ -1678,6 +1678,13 @@ struct task_struct {
 	struct unwind_task_info		unwind_info;
 #endif
 
+	int wait_res_type;
+	union {
+		struct folio		*wait_folio;
+		struct bio		*wait_bio;
+	};
+	unsigned long wait_moment;
+
 	/* CPU-specific state of this task: */
 	struct thread_struct		thread;
 
@@ -1696,6 +1703,39 @@ struct task_struct {
 	CK_KABI_RESERVE(7)
 	CK_KABI_RESERVE(8)
 } __attribute__ ((aligned (64)));
+
+/* copy from jiffies.h to avoid circular dependency */
+extern unsigned long volatile __cacheline_aligned_in_smp jiffies;
+
+enum {
+	TASK_WAIT_FOLIO = 1,
+	TASK_WAIT_BIO,
+};
+
+static inline void task_set_wait_res(int type, void *res)
+{
+	switch (type) {
+	case TASK_WAIT_FOLIO:
+		current->wait_folio = (struct folio *)res;
+		break;
+	case TASK_WAIT_BIO:
+		current->wait_bio = (struct bio *)res;
+		break;
+	default:
+		current->wait_folio = NULL;
+		break;
+	}
+
+	current->wait_res_type = type;
+	current->wait_moment = jiffies;
+}
+
+static inline void task_clear_wait_res(void)
+{
+	current->wait_folio = NULL;
+	current->wait_res_type = 0;
+	current->wait_moment = 0;
+}
 
 #ifdef CONFIG_SCHED_PROXY_EXEC
 DECLARE_STATIC_KEY_TRUE(__sched_proxy_exec);

@@ -405,7 +405,7 @@ static __cold int io_register_iowq_max_workers(struct io_ring_ctx *ctx,
 	if (sqd) {
 		mutex_unlock(&ctx->uring_lock);
 		mutex_unlock(&sqd->lock);
-		io_put_sq_data(sqd);
+		io_put_sq_data(ctx, sqd);
 		mutex_lock(&ctx->uring_lock);
 	}
 
@@ -434,7 +434,7 @@ err:
 	if (sqd) {
 		mutex_unlock(&ctx->uring_lock);
 		mutex_unlock(&sqd->lock);
-		io_put_sq_data(sqd);
+		io_put_sq_data(ctx, sqd);
 		mutex_lock(&ctx->uring_lock);
 	}
 	return ret;

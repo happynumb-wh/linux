@@ -26,7 +26,7 @@ void io_sq_thread_finish(struct io_ring_ctx *ctx);
 void io_sq_thread_stop(struct io_sq_data *sqd);
 void io_sq_thread_park(struct io_sq_data *sqd);
 void io_sq_thread_unpark(struct io_sq_data *sqd);
-void io_put_sq_data(struct io_sq_data *sqd);
+void io_put_sq_data(struct io_ring_ctx *ctx, struct io_sq_data *sqd);
 void io_sqpoll_wait_sq(struct io_ring_ctx *ctx);
 int io_sqpoll_wq_cpu_affinity(struct io_ring_ctx *ctx, cpumask_var_t mask);
 u64 io_sq_cpu_usec(struct task_struct *tsk);

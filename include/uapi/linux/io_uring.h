@@ -252,6 +252,8 @@ enum io_uring_sqe_flags_bit {
  */
 #define IORING_SETUP_SQ_REWIND		(1U << 20)
 
+#define IORING_SETUP_SQPOLL_PERCPU	(1U << 31) /* percpu SQ poll thread */
+
 enum io_uring_op {
 	IORING_OP_NOP,
 	IORING_OP_READV,

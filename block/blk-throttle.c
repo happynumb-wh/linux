@@ -268,11 +268,11 @@ static struct blkg_policy_data *throtl_pd_alloc(struct gendisk *disk,
 	if (!tg)
 		return NULL;
 
-	if (blkg_rwstat_init(&tg->stat_bytes, gfp))
-		goto err_free_tg;
-
-	if (blkg_rwstat_init(&tg->stat_ios, gfp))
-		goto err_exit_stat_bytes;
+	if (blkg_rwstat_init(&tg->stat_bytes, gfp) ||
+	    blkg_rwstat_init(&tg->stat_ios, gfp) ||
+	    blkg_rwstat_init(&tg->service_time, gfp) ||
+	    blkg_rwstat_init(&tg->wait_time, gfp))
+		goto err;
 
 	throtl_service_queue_init(&tg->service_queue);
 
@@ -289,9 +289,11 @@ static struct blkg_policy_data *throtl_pd_alloc(struct gendisk *disk,
 
 	return &tg->pd;
 
-err_exit_stat_bytes:
+err:
 	blkg_rwstat_exit(&tg->stat_bytes);
-err_free_tg:
+	blkg_rwstat_exit(&tg->stat_ios);
+	blkg_rwstat_exit(&tg->service_time);
+	blkg_rwstat_exit(&tg->wait_time);
 	kfree(tg);
 	return NULL;
 }
@@ -362,7 +364,17 @@ static void throtl_pd_free(struct blkg_policy_data *pd)
 	timer_delete_sync(&tg->service_queue.pending_timer);
 	blkg_rwstat_exit(&tg->stat_bytes);
 	blkg_rwstat_exit(&tg->stat_ios);
+	blkg_rwstat_exit(&tg->service_time);
+	blkg_rwstat_exit(&tg->wait_time);
 	kfree(tg);
+}
+
+static void throtl_pd_reset(struct blkg_policy_data *pd)
+{
+	struct throtl_grp *tg = pd_to_tg(pd);
+
+	blkg_rwstat_reset(&tg->service_time);
+	blkg_rwstat_reset(&tg->wait_time);
 }
 
 static struct throtl_grp *
@@ -915,6 +927,64 @@ static unsigned long tg_dispatch_time(struct throtl_grp *tg, struct bio *bio)
 	throtl_charge_bps_bio(tg, bio);
 
 	return tg_dispatch_iops_time(tg, bio);
+}
+
+static void throtl_stats_update_completion(struct throtl_grp *tg,
+					   uint64_t start_time,
+					   uint64_t io_start_time,
+					   int op)
+{
+	unsigned long flags;
+	uint64_t now = sched_clock();
+
+	local_irq_save(flags);
+	if (time_after64(now, io_start_time))
+		blkg_rwstat_add(&tg->service_time, op, now - io_start_time);
+	if (time_after64(io_start_time, start_time))
+		blkg_rwstat_add(&tg->wait_time, op, io_start_time - start_time);
+	local_irq_restore(flags);
+}
+
+static void throtl_bio_end_io(struct bio *bio)
+{
+	struct throtl_grp *tg;
+
+	rcu_read_lock();
+	/* see comments in throtl_bio_stats_start() */
+	if (!bio_ext_flagged(bio, BIO_THROTL_STATED))
+		goto out;
+
+	tg = (struct throtl_grp *)bio->bi_tg_private;
+	if (!tg)
+		goto out;
+
+	throtl_stats_update_completion(tg, bio_start_time_ns(bio),
+				       bio_io_start_time_ns(bio),
+				       bio_op(bio));
+	blkg_put(tg_to_blkg(tg));
+	bio_clear_ext_flag(bio, BIO_THROTL_STATED);
+out:
+	rcu_read_unlock();
+}
+
+static inline void throtl_bio_stats_start(struct bio *bio, struct throtl_grp *tg)
+{
+	int op = bio_op(bio);
+
+	/*
+	 * It may happen that end_io will be called twice like dm-thin,
+	 * which will save origin end_io first, and call its overwrite
+	 * end_io and then the saved end_io. We use bio flag
+	 * BIO_THROTL_STATED to do only once statistics.
+	 */
+	if ((op == REQ_OP_READ || op == REQ_OP_WRITE) &&
+	    !bio_ext_flagged(bio, BIO_THROTL_STATED)) {
+		blkg_get(tg_to_blkg(tg));
+		bio_set_ext_flag(bio, BIO_THROTL_STATED);
+		bio->bi_tg_end_io = throtl_bio_end_io;
+		bio->bi_tg_private = tg;
+		bio_set_start_time_ns(bio);
+	}
 }
 
 /**
@@ -1471,6 +1541,16 @@ static struct cftype throtl_legacy_files[] = {
 		.private = offsetof(struct throtl_grp, stat_ios),
 		.seq_show = tg_print_rwstat_recursive,
 	},
+	{
+		.name = "throttle.io_service_time",
+		.private = offsetof(struct throtl_grp, service_time),
+		.seq_show = tg_print_rwstat,
+	},
+	{
+		.name = "throttle.io_wait_time",
+		.private = offsetof(struct throtl_grp, wait_time),
+		.seq_show = tg_print_rwstat,
+	},
 	{ }	/* terminate */
 };
 
@@ -1656,7 +1736,18 @@ static void tg_flush_bios(struct throtl_grp *tg)
 
 static void throtl_pd_offline(struct blkg_policy_data *pd)
 {
-	tg_flush_bios(pd_to_tg(pd));
+	struct throtl_grp *tg = pd_to_tg(pd);
+	struct blkcg_gq *blkg = pd_to_blkg(pd);
+	struct blkcg_gq *parent = blkg->parent;
+
+	tg_flush_bios(tg);
+
+	if (parent) {
+		blkg_rwstat_add_aux(&blkg_to_tg(parent)->service_time,
+				    &tg->service_time);
+		blkg_rwstat_add_aux(&blkg_to_tg(parent)->wait_time,
+				    &tg->wait_time);
+	}
 }
 
 struct blkcg_policy blkcg_policy_throtl = {
@@ -1668,6 +1759,7 @@ struct blkcg_policy blkcg_policy_throtl = {
 	.pd_online_fn		= throtl_pd_online,
 	.pd_offline_fn		= throtl_pd_offline,
 	.pd_free_fn		= throtl_pd_free,
+	.pd_reset_stats_fn	= throtl_pd_reset,
 };
 
 void blk_throtl_cancel_bios(struct gendisk *disk)
@@ -1741,6 +1833,8 @@ bool __blk_throtl_bio(struct bio *bio)
 	struct throtl_data *td = tg->td;
 
 	rcu_read_lock();
+	throtl_bio_stats_start(bio, tg);
+
 	spin_lock_irq(&q->queue_lock);
 	sq = &tg->service_queue;
 
@@ -1818,6 +1912,8 @@ bool __blk_throtl_bio(struct bio *bio)
 
 out_unlock:
 	spin_unlock_irq(&q->queue_lock);
+	if (!throttled)
+		bio_set_io_start_time_ns(bio);
 
 	rcu_read_unlock();
 	return throttled;

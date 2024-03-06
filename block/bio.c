@@ -237,6 +237,12 @@ void bio_init(struct bio *bio, struct block_device *bdev, struct bio_vec *table,
 	bio->issue_time_ns = 0;
 	if (bdev)
 		bio_associate_blkg(bio);
+#ifdef CONFIG_BLK_DEV_THROTTLING
+	bio->start_time_ns = 0;
+	bio->io_start_time_ns = 0;
+	bio->bi_tg_end_io = NULL;
+	bio->bi_tg_private = NULL;
+#endif
 #ifdef CONFIG_BLK_CGROUP_IOCOST
 	bio->bi_iocost_cost = 0;
 #endif
@@ -256,6 +262,7 @@ void bio_init(struct bio *bio, struct block_device *bdev, struct bio_vec *table,
 	bio->bi_max_vecs = max_vecs;
 	bio->bi_io_vec = table;
 	bio->bi_pool = NULL;
+	bio->bi_ext_flags = 0;
 }
 EXPORT_SYMBOL(bio_init);
 
@@ -1792,6 +1799,10 @@ again:
 	}
 #endif
 
+#ifdef CONFIG_BLK_DEV_THROTTLING
+	if (bio->bi_tg_end_io)
+		bio->bi_tg_end_io(bio);
+#endif
 	if (bio->bi_end_io)
 		bio->bi_end_io(bio);
 }

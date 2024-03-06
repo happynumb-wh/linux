@@ -241,6 +241,21 @@ static inline void bio_cnt_set(struct bio *bio, unsigned int count)
 	atomic_set(&bio->__bi_cnt, count);
 }
 
+static inline bool bio_ext_flagged(struct bio *bio, unsigned int bit)
+{
+	return (bio->bi_ext_flags & (1U << bit)) != 0;
+}
+
+static inline void bio_set_ext_flag(struct bio *bio, unsigned int bit)
+{
+	bio->bi_ext_flags |= (1U << bit);
+}
+
+static inline void bio_clear_ext_flag(struct bio *bio, unsigned int bit)
+{
+	bio->bi_ext_flags &= ~(1U << bit);
+}
+
 static inline struct bio_vec *bio_first_bvec_all(struct bio *bio)
 {
 	WARN_ON_ONCE(bio_flagged(bio, BIO_CLONED));

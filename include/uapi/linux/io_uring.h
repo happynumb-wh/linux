@@ -610,6 +610,7 @@ struct io_cqring_offsets {
 #define IORING_ENTER_ABS_TIMER		(1U << 5)
 #define IORING_ENTER_EXT_ARG_REG	(1U << 6)
 #define IORING_ENTER_NO_IOWAIT		(1U << 7)
+#define IORING_ENTER_SQ_SUBMIT_ON_IDLE	(1U << 31)
 
 /*
  * Passed in for io_uring_setup(2). Copied back with updated info on success

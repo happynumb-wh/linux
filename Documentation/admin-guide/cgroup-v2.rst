@@ -2012,6 +2012,30 @@ IO Interface Files
 	  8:16 rbytes=1459200 wbytes=314773504 rios=192 wios=353 dbytes=0 dios=0
 	  8:0 rbytes=90430464 wbytes=299008000 rios=8950 wios=1252 dbytes=50331648 dios=3021
 
+  io.extstat
+        A read-only nested-keyed file.
+
+        Lines are keyed by $MAJ:$MIN device numbers and not ordered.
+        The following nested keys are defined.
+
+	  ========	=============================
+	  rwait 	IO read wait time
+	  wwait 	IO write wait time
+	  rserv		IO read service time
+	  wserv		IO write service time
+	  rcomp 	Number of completed read IOs
+	  wcomp		Number of completed write IOs
+	  rbytesq	Bytes of queued read IOs
+	  wbytesq	Bytes of queued write IOs
+	  riosq		Number of queued read IOs
+	  wiosq		Number of queued write IOs
+	  ========	=============================
+
+        An example read output follows::
+
+          253:16 rwait=0 wwait=3300 rserv=0 wserv=414366321956 rcomp=0 wcomp=12 rbytesq=0 wbytesq=40960000 riosq=0 wiosq=12
+          253:0 rwait=0 wwait=0 rserv=0 wserv=0 rcomp=0 wcomp=0 rbytesq=0 wbytesq=0 riosq=0 wiosq=0
+
   io.cost.qos
 	A read-write nested-keyed file which exists only on the root
 	cgroup.

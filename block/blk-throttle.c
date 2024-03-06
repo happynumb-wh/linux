@@ -1630,10 +1630,67 @@ static u64 tg_prfill_limit(struct seq_file *sf, struct blkg_policy_data *pd,
 	return 0;
 }
 
+static u64 tg_prfill_extstat(struct seq_file *sf, struct blkg_policy_data *pd,
+			 int off)
+{
+	struct throtl_grp *tg = pd_to_tg(pd);
+	const char *dname = blkg_dev_name(pd->blkg);
+	char bufs[10][21] = { "0", "0", "0", "0", "0", "0", "0", "0", "0", "0" };
+	struct blkg_rwstat_sample tmp = { };
+
+	if (!dname)
+		return 0;
+
+	/* read/write IOs wait time */
+	blkg_rwstat_read(&tg->wait_time, &tmp);
+	snprintf(bufs[0], sizeof(bufs[0]), "%llu",
+		tmp.cnt[BLKG_RWSTAT_READ]);
+	snprintf(bufs[1], sizeof(bufs[1]), "%llu",
+		tmp.cnt[BLKG_RWSTAT_WRITE]);
+	/* read/write IOs service time */
+	blkg_rwstat_read(&tg->service_time, &tmp);
+	snprintf(bufs[2], sizeof(bufs[2]), "%llu",
+		tmp.cnt[BLKG_RWSTAT_READ]);
+	snprintf(bufs[3], sizeof(bufs[3]), "%llu",
+		tmp.cnt[BLKG_RWSTAT_WRITE]);
+	/* read/write completed IOs */
+	blkg_rwstat_read(&tg->completed, &tmp);
+	snprintf(bufs[4], sizeof(bufs[4]), "%llu",
+		tmp.cnt[BLKG_RWSTAT_READ]);
+	snprintf(bufs[5], sizeof(bufs[5]), "%llu",
+		tmp.cnt[BLKG_RWSTAT_WRITE]);
+	/* read/write queued bytes */
+	blkg_rwstat_read(&tg->total_bytes_queued, &tmp);
+	snprintf(bufs[6], sizeof(bufs[6]), "%llu",
+		tmp.cnt[BLKG_RWSTAT_READ]);
+	snprintf(bufs[7], sizeof(bufs[7]), "%llu",
+		tmp.cnt[BLKG_RWSTAT_WRITE]);
+	/* read/write queued IOs */
+	blkg_rwstat_read(&tg->total_io_queued, &tmp);
+	snprintf(bufs[8], sizeof(bufs[8]), "%llu",
+		tmp.cnt[BLKG_RWSTAT_READ]);
+	snprintf(bufs[9], sizeof(bufs[9]), "%llu",
+		tmp.cnt[BLKG_RWSTAT_WRITE]);
+
+	seq_printf(sf, "%s rwait=%s wwait=%s rserv=%s wserv=%s rcomp=%s wcomp=%s "
+			"rbytesq=%s wbytesq=%s riosq=%s wiosq=%s\n",
+			dname, bufs[0], bufs[1], bufs[2], bufs[3], bufs[4],
+			bufs[5], bufs[6], bufs[7], bufs[8], bufs[9]);
+
+	return 0;
+}
+
 static int tg_print_limit(struct seq_file *sf, void *v)
 {
 	blkcg_print_blkgs(sf, css_to_blkcg(seq_css(sf)), tg_prfill_limit,
 			  &blkcg_policy_throtl, seq_cft(sf)->private, false);
+	return 0;
+}
+
+static int tg_print_extstat(struct seq_file *sf, void *v)
+{
+	blkcg_print_blkgs(sf, css_to_blkcg(seq_css(sf)), tg_prfill_extstat,
+			  &blkcg_policy_throtl, 0, false);
 	return 0;
 }
 
@@ -1723,6 +1780,10 @@ static struct cftype throtl_files[] = {
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.seq_show = tg_print_limit,
 		.write = tg_set_limit,
+	},
+	{
+		.name = "extstat",
+		.seq_show = tg_print_extstat,
 	},
 	{ }	/* terminate */
 };

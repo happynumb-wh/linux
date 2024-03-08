@@ -127,6 +127,9 @@ enum pageflags {
 #ifdef CONFIG_ARCH_USES_PG_ARCH_3
 	PG_arch_3,
 #endif
+#ifdef CONFIG_KFENCE
+	PG_kfence,		/* Page in kfence pool */
+#endif
 	__NR_PAGEFLAGS,
 
 	PG_readahead = PG_reclaim,
@@ -687,6 +690,10 @@ PAGEFLAG(VmemmapSelfHosted, vmemmap_self_hosted, PF_ANY)
 PAGEFLAG_FALSE(VmemmapSelfHosted, vmemmap_self_hosted)
 #endif
 
+#ifdef CONFIG_KFENCE
+__PAGEFLAG(Kfence, kfence, PF_ANY)
+#endif
+
 /*
  * On an anonymous folio mapped into a user virtual memory area,
  * folio->mapping points to its anon_vma, not to a struct address_space;
@@ -1182,6 +1189,12 @@ static __always_inline void __ClearPageAnonExclusive(struct page *page)
 #define __PG_MLOCKED		(1UL << PG_mlocked)
 #else
 #define __PG_MLOCKED		0
+#endif
+
+#ifdef CONFIG_KFENCE
+#define __PG_KFENCE		(1UL << PG_kfence)
+#else
+#define __PG_KFENCE		0
 #endif
 
 /*

@@ -12,11 +12,13 @@
 #include <linux/mm.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/static_key.h>
 #include <linux/types.h>
 
 #include "../slab.h" /* for struct kmem_cache */
 
 extern bool kfence_enabled;
+DECLARE_STATIC_KEY_FALSE(kfence_short_canary);
 
 /*
  * Get the canary byte pattern for @addr. Use a pattern that varies based on the
@@ -35,8 +37,6 @@ extern bool kfence_enabled;
 
 /* Maximum stack depth for reports. */
 #define KFENCE_STACK_DEPTH 64
-
-extern raw_spinlock_t kfence_freelist_lock;
 
 /* KFENCE object states. */
 enum kfence_object_state {
@@ -57,7 +57,7 @@ struct kfence_track {
 
 /* KFENCE metadata per guarded allocation. */
 struct kfence_metadata {
-	struct list_head list __guarded_by(&kfence_freelist_lock);	/* Freelist node. */
+	struct list_head list;		/* Freelist node; access under per-node freelist lock. */
 	struct rcu_head rcu_head;	/* For delayed freeing. */
 
 	/*
@@ -105,32 +105,66 @@ struct kfence_metadata {
 #ifdef CONFIG_MEMCG
 	struct slabobj_ext obj_exts;
 #endif
+	struct kfence_pool_area *kpa;
 };
 
 #define KFENCE_METADATA_SIZE PAGE_ALIGN(sizeof(struct kfence_metadata) * \
 					CONFIG_KFENCE_NUM_OBJECTS)
 
-extern struct kfence_metadata *kfence_metadata;
+extern struct rb_root kfence_pool_root;
+#define kfence_rbentry(cur) rb_entry((cur), struct kfence_pool_area, rb_node)
+#define kfence_for_each_area(kpa, iter)					\
+	for ((iter) = rb_first(&kfence_pool_root);			\
+	     (iter) && ((kpa) = kfence_rbentry((iter)));		\
+	     (iter) = rb_next((iter)))
+
+/**
+ * get_kfence_pool_area() - find the kfence pool area of the address
+ * @addr: address to check
+ *
+ * Return: the kfence pool area, NULL if not a kfence address
+ */
+static inline struct kfence_pool_area *get_kfence_pool_area(const void *addr)
+{
+	struct rb_node *cur;
+	struct kfence_pool_area *res = NULL;
+
+	for (cur = kfence_pool_root.rb_node; cur;) {
+		struct kfence_pool_area *kpa = kfence_rbentry(cur);
+
+		if ((unsigned long)addr < (unsigned long)kpa->addr)
+			cur = cur->rb_left;
+		else {
+			res = kpa;
+			cur = cur->rb_right;
+		}
+	}
+
+	return is_kfence_address_area(addr, res) ? res : NULL;
+}
 
 static inline struct kfence_metadata *addr_to_metadata(unsigned long addr)
 {
 	long index;
+	struct kfence_metadata *meta_base;
+	struct kfence_pool_area *kpa = get_kfence_pool_area((void *)addr);
 
 	/* The checks do not affect performance; only called from slow-paths. */
 
-	if (!is_kfence_address((void *)addr))
+	if (!kpa)
 		return NULL;
+
+	meta_base = kpa->meta;
 
 	/*
 	 * May be an invalid index if called with an address at the edge of
-	 * __kfence_pool, in which case we would report an "invalid access"
-	 * error.
+	 * the pool, in which case we would report an "invalid access" error.
 	 */
-	index = (addr - (unsigned long)__kfence_pool) / (PAGE_SIZE * 2) - 1;
-	if (index < 0 || index >= CONFIG_KFENCE_NUM_OBJECTS)
+	index = (addr - (unsigned long)kpa->addr) / (PAGE_SIZE * 2) - 1;
+	if (index < 0 || index >= kpa->nr_objects)
 		return NULL;
 
-	return &kfence_metadata[index];
+	return &meta_base[index];
 }
 
 /* KFENCE error types for report generation. */

@@ -244,6 +244,7 @@ enum allocation_policy {
  */
 static void *test_alloc(struct kunit *test, size_t size, gfp_t gfp, enum allocation_policy policy)
 {
+	long _kfence_sample_interval = kfence_sample_interval;
 	void *alloc;
 	unsigned long timeout, resched_after;
 	const char *policy_name;
@@ -270,13 +271,15 @@ static void *test_alloc(struct kunit *test, size_t size, gfp_t gfp, enum allocat
 	 * 100x the sample interval should be more than enough to ensure we get
 	 * a KFENCE allocation eventually.
 	 */
-	timeout = jiffies + msecs_to_jiffies(100 * kfence_sample_interval);
+	if (kfence_sample_interval < 0)
+		_kfence_sample_interval = 100;
+	timeout = jiffies + msecs_to_jiffies(100 * _kfence_sample_interval);
 	/*
 	 * Especially for non-preemption kernels, ensure the allocation-gate
 	 * timer can catch up: after @resched_after, every failed allocation
 	 * attempt yields, to ensure the allocation-gate timer is scheduled.
 	 */
-	resched_after = jiffies + msecs_to_jiffies(kfence_sample_interval);
+	resched_after = jiffies + msecs_to_jiffies(_kfence_sample_interval);
 	do {
 		if (test_cache)
 			alloc = kmem_cache_alloc(test_cache, gfp);
@@ -304,6 +307,9 @@ static void *test_alloc(struct kunit *test, size_t size, gfp_t gfp, enum allocat
 			if (policy == ALLOCATE_RIGHT && !PAGE_ALIGNED(alloc))
 				return alloc;
 		} else if (policy == ALLOCATE_NONE)
+			return alloc;
+
+		if (kfence_sample_interval < 0 && policy == ALLOCATE_NONE)
 			return alloc;
 
 		test_free(alloc);
@@ -626,7 +632,7 @@ static void test_gfpzero(struct kunit *test)
 	int i;
 
 	/* Skip if we think it'd take too long. */
-	KFENCE_TEST_REQUIRES(test, kfence_sample_interval <= 100);
+	KFENCE_TEST_REQUIRES(test, kfence_sample_interval <= 100 && kfence_num_objects <= 255);
 
 	setup_test_cache(test, size, 0, NULL);
 	buf1 = test_alloc(test, size, GFP_KERNEL, ALLOCATE_ANY);
@@ -641,7 +647,7 @@ static void test_gfpzero(struct kunit *test)
 			break;
 		test_free(buf2);
 
-		if (kthread_should_stop() || (i == CONFIG_KFENCE_NUM_OBJECTS)) {
+		if (kthread_should_stop() || (i == kfence_num_objects)) {
 			kunit_warn(test, "giving up ... cannot get same object back\n");
 			return;
 		}
@@ -658,12 +664,19 @@ static void test_gfpzero(struct kunit *test)
 
 static void test_invalid_access(struct kunit *test)
 {
-	const struct expect_report expect = {
+	struct expect_report expect = {
 		.type = KFENCE_ERROR_INVALID,
 		.fn = test_invalid_access,
-		.addr = &__kfence_pool[10],
 		.is_write = false,
 	};
+	struct rb_node *cur = kfence_pool_root.rb_node;
+	char *__kfence_pool;
+
+	if (!cur)
+		return;
+
+	__kfence_pool = kfence_rbentry(cur)->addr;
+	expect.addr = &__kfence_pool[10];
 
 	READ_ONCE(__kfence_pool[10]);
 	KUNIT_EXPECT_TRUE(test, report_matches(&expect));
@@ -748,6 +761,7 @@ static void test_krealloc(struct kunit *test)
 /* Test that some objects from a bulk allocation belong to KFENCE pool. */
 static void test_memcache_alloc_bulk(struct kunit *test)
 {
+	long _kfence_sample_interval = kfence_sample_interval;
 	const size_t size = 32;
 	bool pass = false;
 	unsigned long timeout;
@@ -758,7 +772,9 @@ static void test_memcache_alloc_bulk(struct kunit *test)
 	 * 100x the sample interval should be more than enough to ensure we get
 	 * a KFENCE allocation eventually.
 	 */
-	timeout = jiffies + msecs_to_jiffies(100 * kfence_sample_interval);
+	if (kfence_sample_interval < 0)
+		_kfence_sample_interval = 100;
+	timeout = jiffies + msecs_to_jiffies(100 * _kfence_sample_interval);
 	do {
 		void *objects[100];
 		int i, num = kmem_cache_alloc_bulk(test_cache, GFP_ATOMIC, ARRAY_SIZE(objects),
@@ -822,7 +838,7 @@ static int test_init(struct kunit *test)
 	unsigned long flags;
 	int i;
 
-	if (!__kfence_pool)
+	if (!kfence_pool_root.rb_node)
 		return -EINVAL;
 
 	spin_lock_irqsave(&observed.lock, flags);

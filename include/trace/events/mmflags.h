@@ -137,9 +137,16 @@ TRACE_DEFINE_ENUM(___GFP_LAST_BIT);
 #define IF_HAVE_PG_ARCH_3(_name)
 #endif
 
+#ifdef CONFIG_KFENCE
+#define IF_HAVE_PG_KFENCE(_name) DEF_PAGEFLAG_NAME(_name),
+#else
+#define IF_HAVE_PG_KFENCE(_name)
+#endif
+
 #define DEF_PAGEFLAG_NAME(_name) { 1UL <<  PG_##_name, __stringify(_name) }
 
 #define __def_pageflag_names						\
+	IF_HAVE_PG_KFENCE(kfence)					\
 	DEF_PAGEFLAG_NAME(locked),					\
 	DEF_PAGEFLAG_NAME(waiters),					\
 	DEF_PAGEFLAG_NAME(referenced),					\

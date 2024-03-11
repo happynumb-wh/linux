@@ -163,6 +163,7 @@ void kfence_print_object(struct seq_file *seq, const struct kfence_metadata *met
 	const int size = abs(meta->size);
 	const unsigned long start = meta->addr;
 	const struct kmem_cache *const cache = meta->cache;
+	struct page *page = virt_to_page((void *)start);
 
 	lockdep_assert_held(&meta->lock);
 
@@ -173,7 +174,8 @@ void kfence_print_object(struct seq_file *seq, const struct kfence_metadata *met
 
 	seq_con_printf(seq, "kfence-#%td: 0x%p-0x%p, size=%d, cache=%s\n\n",
 		       meta - kfence_metadata, (void *)start, (void *)(start + size - 1),
-		       size, (cache && cache->name) ? cache->name : "<destroyed>");
+		       size, (cache && cache->name) ? cache->name : PageSlab(page) ?
+		       "<destroyed>" : "PAGE");
 
 	kfence_print_stack(seq, meta, true);
 

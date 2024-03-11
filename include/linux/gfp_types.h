@@ -56,6 +56,9 @@ enum {
 	___GFP_NOLOCKDEP_BIT,
 #endif
 	___GFP_NO_OBJ_EXT_BIT,
+#ifdef CONFIG_KFENCE
+	___GFP_NOKFENCE_BIT,
+#endif
 	___GFP_LAST_BIT
 };
 
@@ -97,6 +100,11 @@ enum {
 #define ___GFP_NOLOCKDEP	0
 #endif
 #define ___GFP_NO_OBJ_EXT       BIT(___GFP_NO_OBJ_EXT_BIT)
+#ifdef CONFIG_KFENCE
+#define ___GFP_NOKFENCE         BIT(___GFP_NOKFENCE_BIT)
+#else
+#define ___GFP_NOKFENCE         0
+#endif
 
 /*
  * Physical address zone modifiers (see linux/mmzone.h - low four bits)
@@ -141,6 +149,8 @@ enum {
  * %__GFP_NO_OBJ_EXT causes slab allocation to have no object extension.
  * mark_obj_codetag_empty() should be called upon freeing for objects allocated
  * with this flag to indicate that their NULL tags are expected and normal.
+ *
+ * %__GFP_NOKFENCE informs DO NOT try to alloc page from kfence pool.
  */
 #define __GFP_RECLAIMABLE ((__force gfp_t)___GFP_RECLAIMABLE)
 #define __GFP_WRITE	((__force gfp_t)___GFP_WRITE)
@@ -148,6 +158,7 @@ enum {
 #define __GFP_THISNODE	((__force gfp_t)___GFP_THISNODE)
 #define __GFP_ACCOUNT	((__force gfp_t)___GFP_ACCOUNT)
 #define __GFP_NO_OBJ_EXT   ((__force gfp_t)___GFP_NO_OBJ_EXT)
+#define __GFP_NOKFENCE	((__force gfp_t)___GFP_NOKFENCE)
 
 /**
  * DOC: Watermark modifiers

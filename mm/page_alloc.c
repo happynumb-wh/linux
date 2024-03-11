@@ -55,6 +55,7 @@
 #include <linux/cacheinfo.h>
 #include <linux/pgalloc_tag.h>
 #include <linux/pre_oom.h>
+#include <linux/kfence.h>
 #include <asm/div64.h>
 #include "internal.h"
 #include "shuffle.h"
@@ -1070,6 +1071,12 @@ static inline bool free_page_is_bad(struct page *page)
 	if (likely(page_expected_state(page, PAGE_FLAGS_CHECK_AT_FREE)))
 		return false;
 
+#ifdef CONFIG_KFENCE
+	/* It's not performance sensitive when reaching here */
+	if (PageKfence(page))
+		return false;
+#endif
+
 	/* Something has gone sideways, find it */
 	bad_page(page, page_bad_reason(page, PAGE_FLAGS_CHECK_AT_FREE));
 	return true;
@@ -1398,7 +1405,7 @@ __always_inline bool __free_pages_prepare(struct page *page,
 	}
 
 	page_cpupid_reset_last(page);
-	page->flags.f &= ~PAGE_FLAGS_CHECK_AT_PREP;
+	page->flags.f &= ~(PAGE_FLAGS_CHECK_AT_PREP | __PG_KFENCE);
 	page->private = 0;
 	reset_page_owner(page, order);
 	page_table_check_free(page, order);
@@ -2841,6 +2848,7 @@ static bool free_frozen_page_commit(struct zone *zone,
 	 */
 	pcp->alloc_factor >>= 1;
 	__count_vm_events(PGFREE, 1 << order);
+
 	pindex = order_to_pindex(migratetype, order);
 	list_add(&page->pcp_list, &pcp->lists[pindex]);
 	pcp->count += 1 << order;
@@ -2940,6 +2948,20 @@ static void __free_frozen_pages(struct page *page, unsigned int order,
 		__free_pages_ok(page, order, fpi_flags);
 		return;
 	}
+
+	/*
+	 * Divert KFENCE-owned pages back to the KFENCE pool before
+	 * __free_pages_prepare() runs. __free_pages_prepare() clears
+	 * __PG_KFENCE (and also performs memcg uncharge / KASAN poison /
+	 * arch_free_page() etc. which are inappropriate for pool pages),
+	 * so the later PageKfence() check in free_frozen_page_commit()
+	 * would always miss and the page would leak back into the buddy
+	 * allocator while its KFENCE metadata stays in ALLOCATED state and
+	 * the object page remains unprotected -- making use-after-free and
+	 * out-of-bounds accesses on freed KFENCE pages undetectable.
+	 */
+	if (unlikely(!order && kfence_free_page(page)))
+		return;
 
 	if (!__free_pages_prepare(page, order, fpi_flags))
 		return;
@@ -5188,7 +5210,9 @@ retry_this_zone:
 			continue;
 		}
 
-		page = __rmqueue_pcplist(zone, 0, ac.migratetype, alloc_flags,
+		page = kfence_alloc_page(0, preferred_nid, gfp);
+		if (likely(!page))
+			page = __rmqueue_pcplist(zone, 0, ac.migratetype, alloc_flags,
 								pcp, pcp_list);
 		if (unlikely(!page)) {
 			/* Try and allocate at least one page */
@@ -5258,6 +5282,12 @@ struct page *__alloc_frozen_pages_noprof(gfp_t gfp, unsigned int order,
 	 * memory until all local zones are considered.
 	 */
 	alloc_flags |= alloc_flags_nofragment(zonelist_zone(ac.preferred_zoneref), gfp);
+
+	page = kfence_alloc_page(order, preferred_nid, alloc_gfp);
+	if (unlikely(page)) {
+		prep_new_page(page, 0, alloc_gfp, alloc_flags);
+		goto out;
+	}
 
 	/* First allocation attempt */
 	page = get_page_from_freelist(alloc_gfp, order, alloc_flags, &ac);

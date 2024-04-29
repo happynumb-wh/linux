@@ -96,7 +96,7 @@ static void kfence_enable_late(void);
 static void kfence_disable(void);
 static int param_set_sample_interval(const char *val, const struct kernel_param *kp)
 {
-	unsigned long num;
+	long num;
 	int ret = kstrtol(val, 0, &num);
 
 	if (ret < 0)

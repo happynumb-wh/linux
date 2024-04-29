@@ -913,7 +913,7 @@ static inline bool __free_meta(void *addr, struct kfence_metadata *meta, bool zo
 		 * data is still there, and after a use-after-free is detected, we
 		 * unprotect the page, so the data is still accessible.
 		 */
-		if (!zombie && unlikely(slab_want_init_on_free(meta->cache)))
+		if (!zombie && unlikely(init))
 			memzero_explicit(addr, meta->size);
 	}
 

@@ -1224,6 +1224,7 @@ int online_pages(unsigned long pfn, unsigned long nr_pages,
 
 	/* reinitialise watermarks and update pcp limits */
 	init_per_zone_wmark_min();
+	init_min_cache_kbytes();
 
 	kswapd_run(nid);
 	kcompactd_run(nid);
@@ -2060,6 +2061,7 @@ int offline_pages(unsigned long start_pfn, unsigned long nr_pages,
 
 	/* reinitialise watermarks and update pcp limits */
 	init_per_zone_wmark_min();
+	init_min_cache_kbytes();
 
 	/*
 	 * Check whether this operation removes the last normal memory from

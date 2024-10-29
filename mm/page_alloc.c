@@ -6588,6 +6588,41 @@ static void setup_min_cache_kbytes(void)
 	}
 }
 
+/*
+ * Initialise min_cache_kbytes.
+ *
+ * 0   < total memory <= 4G,   min_cache_kbytes:  150M
+ * 4G  < total memory <= 8G,   min_cache_kbytes:  300M
+ * 8G  < total memory <= 16G,  min_cache_kbytes:  400M
+ * 16G < total memory <= 128G, min_cache_kbytes:  500M
+ *       total memory >  128G, min_cache_kbytes: 1024M
+ */
+
+int __meminit init_min_cache_kbytes(void)
+{
+	unsigned long total_ram_bytes = totalram_pages() << PAGE_SHIFT;
+
+	if (total_ram_bytes <= 4UL * SZ_1G)
+		/* limit min_cache_kbytes to 1/2 of total memory at most */
+		if (total_ram_bytes / 2 < 150 * SZ_1M)
+			sysctl_min_cache_kbytes = total_ram_bytes / 2 / SZ_1K;
+		else
+			sysctl_min_cache_kbytes = 150 * SZ_1K;
+	else if (total_ram_bytes <= 8UL * SZ_1G)
+		sysctl_min_cache_kbytes = 300 * SZ_1K;
+	else if (total_ram_bytes <= 16UL * SZ_1G)
+		sysctl_min_cache_kbytes = 400 * SZ_1K;
+	else if (total_ram_bytes <= 128UL * SZ_1G)
+		sysctl_min_cache_kbytes = 500 * SZ_1K;
+	else
+		sysctl_min_cache_kbytes = 1024 * SZ_1K;
+
+	setup_min_cache_kbytes();
+
+	return 0;
+}
+postcore_initcall(init_min_cache_kbytes)
+
 static int sysctl_min_cache_kbytes_sysctl_handler(const struct ctl_table *table, int write,
 	void __user *buffer, size_t *length, loff_t *ppos)
 {

@@ -81,6 +81,7 @@ unsigned long huge_anon_orders_always __read_mostly;
 unsigned long huge_anon_orders_madvise __read_mostly;
 unsigned long huge_anon_orders_inherit __read_mostly;
 unsigned long huge_file_orders_always __read_mostly;
+int huge_file_exec_order __read_mostly = -1;
 static bool anon_orders_configured __initdata;
 
 static inline bool file_thp_enabled(struct vm_area_struct *vma)
@@ -551,6 +552,7 @@ static const struct attribute_group hugepage_attr_group = {
 static void hugepage_exit_sysfs(struct kobject *hugepage_kobj);
 static void thpsize_release(struct kobject *kobj);
 static DEFINE_SPINLOCK(huge_anon_orders_lock);
+static DEFINE_SPINLOCK(huge_file_orders_lock);
 static LIST_HEAD(thpsize_list);
 
 static ssize_t anon_enabled_show(struct kobject *kobj,
@@ -626,11 +628,15 @@ static ssize_t file_enabled_show(struct kobject *kobj,
 {
 	int order = to_thpsize(kobj)->order;
 	const char *output;
+	bool exec;
 
-	if (test_bit(order, &huge_file_orders_always))
-		output = "[always] never";
-	else
-		output = "always [never]";
+	if (test_bit(order, &huge_file_orders_always)) {
+		exec = READ_ONCE(huge_file_exec_order) == order;
+		output = exec ? "always [always+exec] never" :
+				"[always] always+exec never";
+	} else {
+		output = "always always+exec [never]";
+	}
 
 	return sysfs_emit(buf, "%s\n", output);
 }
@@ -641,13 +647,24 @@ static ssize_t file_enabled_store(struct kobject *kobj,
 	int order = to_thpsize(kobj)->order;
 	ssize_t ret = count;
 
-	if (sysfs_streq(buf, "always"))
-		set_bit(order, &huge_file_orders_always);
-	else if (sysfs_streq(buf, "never"))
-		clear_bit(order, &huge_file_orders_always);
-	else
-		ret = -EINVAL;
+	spin_lock(&huge_file_orders_lock);
 
+	if (sysfs_streq(buf, "always")) {
+		set_bit(order, &huge_file_orders_always);
+		if (huge_file_exec_order == order)
+			huge_file_exec_order = -1;
+	} else if (sysfs_streq(buf, "always+exec")) {
+		set_bit(order, &huge_file_orders_always);
+		huge_file_exec_order = order;
+	} else if (sysfs_streq(buf, "never")) {
+		clear_bit(order, &huge_file_orders_always);
+		if (huge_file_exec_order == order)
+			huge_file_exec_order = -1;
+	} else {
+		ret = -EINVAL;
+	}
+
+	spin_unlock(&huge_file_orders_lock);
 	return ret;
 }
 

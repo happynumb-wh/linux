@@ -3391,9 +3391,11 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 		struct vm_area_struct *vma = vmf->vma;
 		unsigned long start = vma->vm_pgoff;
 		unsigned long end = start + vma_pages(vma);
+		int exec_order = file_exec_order();
 		unsigned long ra_end;
 
-		ra->order = exec_folio_order();
+		/* If explicit order is set for exec mappings, use it. */
+		ra->order = exec_order >= 0 ? exec_order : exec_folio_order();
 		ra->start = round_down(vmf->pgoff, 1UL << ra->order);
 		ra->start = max(ra->start, start);
 		ra_end = round_up(ra->start + ra->ra_pages, 1UL << ra->order);

@@ -345,11 +345,17 @@ memory from a set of allowed sizes. By default all THP sizes that the page cache
 supports are allowed, but this set can be modified with one of::
 
         echo always >/sys/kernel/mm/transparent_hugepage/hugepages-<size>kB/file_enabled
+        echo always+exec >/sys/kernel/mm/transparent_hugepage/hugepages-<size>kB/file_enabled
         echo never >/sys/kernel/mm/transparent_hugepage/hugepages-<size>kB/file_enabled
 
 where <size> is the hugepage size being addressed, the available sizes for which
 vary by system. ``always`` adds the hugepage size to the set of allowed sizes,
 and ``never`` removes the hugepage size from the set of allowed sizes.
+
+``always+exec`` acts like ``always`` but additionally marks the hugepage size as
+the preferred hugepage size for sections of any file mapped executable. A
+maximum of one hugepage size can be marked as ``exec`` at a time, so applying it
+to a new size implicitly removes it from any size it was previously set for.
 
 In some situations, constraining the allowed sizes can reduce memory
 fragmentation, resulting in fewer allocation fallbacks and improved system

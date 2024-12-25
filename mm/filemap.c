@@ -997,9 +997,13 @@ struct folio *filemap_alloc_folio_noprof(gfp_t gfp, unsigned int order,
 	int n;
 	struct folio *folio;
 
-	if (policy)
-		return folio_alloc_mpol_noprof(gfp, order, policy,
+	if (policy) {
+		folio = folio_alloc_mpol_noprof(gfp, order, policy,
 				NO_INTERLEAVE_INDEX, numa_node_id());
+		if (folio)
+			count_mthp_stat(order, MTHP_STAT_FILE_ALLOC);
+		return folio;
+	}
 
 	if (cpuset_do_page_mem_spread()) {
 		unsigned int cpuset_mems_cookie;
@@ -1009,9 +1013,15 @@ struct folio *filemap_alloc_folio_noprof(gfp_t gfp, unsigned int order,
 			folio = __folio_alloc_node_noprof(gfp, order, n);
 		} while (!folio && read_mems_allowed_retry(cpuset_mems_cookie));
 
+		if (folio)
+			count_mthp_stat(order, MTHP_STAT_FILE_ALLOC);
 		return folio;
 	}
-	return folio_alloc_noprof(gfp, order);
+
+	folio = folio_alloc_noprof(gfp, order);
+	if (folio)
+		count_mthp_stat(order, MTHP_STAT_FILE_ALLOC);
+	return folio;
 }
 EXPORT_SYMBOL(filemap_alloc_folio_noprof);
 #endif

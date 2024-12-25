@@ -104,6 +104,24 @@ enum tva_type {
 #define thp_vma_allowable_order(vma, vm_flags, type, order) \
 	(!!thp_vma_allowable_orders(vma, vm_flags, type, BIT(order)))
 
+static inline int lowest_order(unsigned long orders)
+{
+	if (orders)
+		return __ffs(orders);
+	return -1;
+}
+
+static inline int highest_order(unsigned long orders)
+{
+	return fls_long(orders) - 1;
+}
+
+static inline int next_order(unsigned long *orders, int prev)
+{
+	*orders &= ~BIT(prev);
+	return highest_order(*orders);
+}
+
 #define split_folio(f) split_folio_to_list(f, NULL)
 
 #ifdef CONFIG_PGTABLE_HAS_HUGE_LEAVES
@@ -181,6 +199,12 @@ extern unsigned long transparent_hugepage_flags;
 extern unsigned long huge_anon_orders_always;
 extern unsigned long huge_anon_orders_madvise;
 extern unsigned long huge_anon_orders_inherit;
+extern unsigned long huge_file_orders_always;
+
+static inline unsigned long file_orders_always(void)
+{
+	return READ_ONCE(huge_file_orders_always);
+}
 
 static inline bool hugepage_global_enabled(void)
 {
@@ -193,17 +217,6 @@ static inline bool hugepage_global_always(void)
 {
 	return transparent_hugepage_flags &
 			(1<<TRANSPARENT_HUGEPAGE_FLAG);
-}
-
-static inline int highest_order(unsigned long orders)
-{
-	return fls_long(orders) - 1;
-}
-
-static inline int next_order(unsigned long *orders, int prev)
-{
-	*orders &= ~BIT(prev);
-	return highest_order(*orders);
 }
 
 /*
@@ -737,12 +750,7 @@ static inline bool thp_migration_supported(void)
 	return false;
 }
 
-static inline int highest_order(unsigned long orders)
-{
-	return 0;
-}
-
-static inline int next_order(unsigned long *orders, int prev)
+static inline unsigned long file_orders_always(void)
 {
 	return 0;
 }

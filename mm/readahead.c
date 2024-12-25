@@ -464,6 +464,15 @@ static inline int ra_alloc_folio(struct readahead_control *ractl, pgoff_t index,
 	return 0;
 }
 
+static int select_new_order(int old_order, int max_order, unsigned long orders)
+{
+	orders &= BIT(max_order + 1) - 1;
+	VM_WARN_ON(!orders);
+
+	orders &= (BIT(old_order + 1) - 1);
+	return highest_order(orders);
+}
+
 void page_cache_ra_order(struct readahead_control *ractl,
 		struct file_ra_state *ra)
 {
@@ -477,6 +486,7 @@ void page_cache_ra_order(struct readahead_control *ractl,
 	int err = 0;
 	gfp_t gfp = readahead_gfp_mask(mapping);
 	unsigned int new_order = ra->order;
+	unsigned long orders;
 
 	trace_page_cache_ra_order(mapping->host, start, ra);
 	if (!mapping_large_folio_support(mapping)) {
@@ -486,8 +496,9 @@ void page_cache_ra_order(struct readahead_control *ractl,
 
 	limit = min(limit, index + ra->size - 1);
 
+	orders = file_orders_always() | BIT(0);
+	new_order = select_new_order(new_order, ilog2(ra->size), orders);
 	new_order = min(mapping_max_folio_order(mapping), new_order);
-	new_order = min_t(unsigned int, new_order, ilog2(ra->size));
 	new_order = max(new_order, min_order);
 
 	ra->order = new_order;
@@ -508,9 +519,10 @@ void page_cache_ra_order(struct readahead_control *ractl,
 
 		/* Align with smaller pages if needed */
 		if (index & ((1UL << order) - 1))
-			order = __ffs(index);
+			order = select_new_order(order, __ffs(index), orders);
 		/* Don't allocate pages past EOF */
-		while (order > min_order && index + (1UL << order) - 1 > limit)
+		while (order > min_order && index + (1UL << order) - 1 > limit &&
+			(BIT(order) & orders) == 0)
 			order--;
 		err = ra_alloc_folio(ractl, index, mark, order, gfp);
 		if (err)

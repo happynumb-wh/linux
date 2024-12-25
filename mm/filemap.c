@@ -1983,6 +1983,7 @@ no_page:
 	if (!folio && (fgp_flags & FGP_CREAT)) {
 		unsigned int min_order = mapping_min_folio_order(mapping);
 		unsigned int order = max(min_order, FGF_GET_ORDER(fgp_flags));
+		unsigned long orders;
 		int err;
 		index = mapping_align_index(mapping, index);
 
@@ -1999,11 +2000,15 @@ no_page:
 
 		if (order > mapping_max_folio_order(mapping))
 			order = mapping_max_folio_order(mapping);
+
+		orders = file_orders_always() | BIT(0);
+		orders &= BIT(order + 1) - 1;
 		/* If we're not aligned, allocate a smaller folio */
 		if (index & ((1UL << order) - 1))
-			order = __ffs(index);
+			orders &= BIT(__ffs(index) + 1) - 1;
+		order = highest_order(orders);
 
-		do {
+		while (orders) {
 			gfp_t alloc_gfp = gfp;
 
 			err = -ENOMEM;
@@ -2024,7 +2029,11 @@ no_page:
 				break;
 			folio_put(folio);
 			folio = NULL;
-		} while (order-- > min_order);
+
+			if (order <= min_order)
+				break;
+			order = next_order(&orders, order);
+		};
 
 		if (err == -EEXIST)
 			goto repeat;

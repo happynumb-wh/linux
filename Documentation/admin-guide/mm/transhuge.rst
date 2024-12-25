@@ -337,6 +337,27 @@ that THP is shared. Exceeding the number would block the collapse::
 
 A higher value may increase memory footprint for some workloads.
 
+File-Backed Hugepages
+---------------------
+
+The kernel will automatically select an appropriate THP size for file-backed
+memory from a set of allowed sizes. By default all THP sizes that the page cache
+supports are allowed, but this set can be modified with one of::
+
+        echo always >/sys/kernel/mm/transparent_hugepage/hugepages-<size>kB/file_enabled
+        echo never >/sys/kernel/mm/transparent_hugepage/hugepages-<size>kB/file_enabled
+
+where <size> is the hugepage size being addressed, the available sizes for which
+vary by system. ``always`` adds the hugepage size to the set of allowed sizes,
+and ``never`` removes the hugepage size from the set of allowed sizes.
+
+In some situations, constraining the allowed sizes can reduce memory
+fragmentation, resulting in fewer allocation fallbacks and improved system
+performance.
+
+Note that any changes to the allowed set of sizes only applies to future
+file-backed THP allocations.
+
 Boot parameters
 ===============
 

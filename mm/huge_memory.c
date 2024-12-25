@@ -83,6 +83,7 @@ unsigned long huge_anon_orders_inherit __read_mostly;
 unsigned long huge_file_orders_always __read_mostly;
 int huge_file_exec_order __read_mostly = -1;
 static bool anon_orders_configured __initdata;
+static bool file_orders_configured;
 
 static inline bool file_thp_enabled(struct vm_area_struct *vma)
 {
@@ -908,7 +909,10 @@ static int __init hugepage_init_sysfs(struct kobject **hugepage_kobj)
 	 * (and therefore THP_ORDERS_ALL_FILE_DEFAULT) isn't a compile-time
 	 * constant so we have to do this here.
 	 */
-	huge_file_orders_always = THP_ORDERS_ALL_FILE_DEFAULT;
+	if (!file_orders_configured) {
+		huge_file_orders_always = THP_ORDERS_ALL_FILE_DEFAULT;
+		file_orders_configured = true;
+	}
 
 	*hugepage_kobj = kobject_create_and_add("transparent_hugepage", mm_kobj);
 	if (unlikely(!*hugepage_kobj)) {
@@ -1192,6 +1196,45 @@ err:
 	return 0;
 }
 __setup("thp_anon=", setup_thp_anon);
+
+static int __init setup_thp_file(char *str)
+{
+	unsigned long size;
+	char *state;
+	int order;
+	int ret = 0;
+
+	if (!str)
+		goto out;
+
+	size = (unsigned long)memparse(str, &state);
+	order = ilog2(size >> PAGE_SHIFT);
+	if (*state != ':' || !is_power_of_2(size) || size <= PAGE_SIZE ||
+	    !(BIT(order) & THP_ORDERS_ALL_FILE_DEFAULT))
+		goto out;
+
+	state++;
+
+	if (!strcmp(state, "always")) {
+		set_bit(order, &huge_file_orders_always);
+		ret = 1;
+	} else if (!strcmp(state, "always+exec")) {
+		set_bit(order, &huge_file_orders_always);
+		huge_file_exec_order = order;
+		ret = 1;
+	} else if (!strcmp(state, "never")) {
+		clear_bit(order, &huge_file_orders_always);
+		ret = 1;
+	}
+
+	if (ret)
+		file_orders_configured = true;
+out:
+	if (!ret)
+		pr_warn("thp_file=%s: cannot parse, ignored\n", str);
+	return ret;
+}
+__setup("thp_file=", setup_thp_file);
 
 pmd_t maybe_pmd_mkwrite(pmd_t pmd, struct vm_area_struct *vma)
 {

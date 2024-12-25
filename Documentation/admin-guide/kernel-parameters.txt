@@ -7595,6 +7595,14 @@ Kernel parameters
 			See Documentation/admin-guide/mm/transhuge.rst for more
 			details.
 
+	thp_file=       [KNL]
+			Format: <size>[KMG]:always|always+exec|never
+			Can be used to control the default behavior of the
+			system with respect to file-backed transparent hugepages.
+			Can be used multiple times for multiple file-backed THP
+			sizes. See Documentation/admin-guide/mm/transhuge.rst
+			for more details.
+
 	threadirqs	[KNL,EARLY]
 			Force threading of all interrupt handlers except those
 			marked explicitly IRQF_NO_THREAD.

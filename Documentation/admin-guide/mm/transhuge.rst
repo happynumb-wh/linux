@@ -430,6 +430,19 @@ user, the PMD_ORDER hugepage policy will be overridden. If the policy for
 PMD_ORDER is not defined within a valid ``thp_shmem``, its policy will
 default to ``never``.
 
+Each supported file-backed THP size can be controlled by passing
+``thp_file=<size>[KMG]:<state>``, where ``<size>`` is the THP size and
+``<state>`` is one of ``always``, ``always+exec`` or ``never``.
+
+For example, the following will set 64K THP to ``always+exec``::
+
+        thp_file=64K:always+exec
+
+``thp_file=`` may be specified multiple times to configure all THP sizes as
+required. If ``thp_file=`` is specified at least once, any file-backed THP
+sizes not explicitly configured on the command line are implicitly set to
+``never``.
+
 Hugepages in tmpfs/shmem
 ========================
 

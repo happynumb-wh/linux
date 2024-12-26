@@ -1199,40 +1199,82 @@ __setup("thp_anon=", setup_thp_anon);
 
 static int __init setup_thp_file(char *str)
 {
-	unsigned long size;
-	char *state;
-	int order;
-	int ret = 0;
+	char *token, *range, *policy, *subtoken;
+	unsigned long always;
+	char *start_size, *end_size;
+	int start, end, nr, exec;
+	char *p;
 
-	if (!str)
-		goto out;
+	if (!str || strlen(str) + 1 > PAGE_SIZE)
+		goto err;
+	strcpy(str_dup, str);
 
-	size = (unsigned long)memparse(str, &state);
-	order = ilog2(size >> PAGE_SHIFT);
-	if (*state != ':' || !is_power_of_2(size) || size <= PAGE_SIZE ||
-	    !(BIT(order) & THP_ORDERS_ALL_FILE_DEFAULT))
-		goto out;
+	always = huge_file_orders_always;
+	exec = huge_file_exec_order;
+	p = str_dup;
+	while ((token = strsep(&p, ";")) != NULL) {
+		range = strsep(&token, ":");
+		policy = token;
 
-	state++;
+		if (!policy)
+			goto err;
 
-	if (!strcmp(state, "always")) {
-		set_bit(order, &huge_file_orders_always);
-		ret = 1;
-	} else if (!strcmp(state, "always+exec")) {
-		set_bit(order, &huge_file_orders_always);
-		huge_file_exec_order = order;
-		ret = 1;
-	} else if (!strcmp(state, "never")) {
-		clear_bit(order, &huge_file_orders_always);
-		ret = 1;
+		while ((subtoken = strsep(&range, ",")) != NULL) {
+			if (strchr(subtoken, '-')) {
+				start_size = strsep(&subtoken, "-");
+				end_size = subtoken;
+
+				start = get_order_from_str(start_size,
+							   THP_ORDERS_ALL_FILE_DEFAULT);
+				end = get_order_from_str(end_size,
+							 THP_ORDERS_ALL_FILE_DEFAULT);
+			} else {
+				start_size = end_size = subtoken;
+				start = end = get_order_from_str(subtoken,
+								 THP_ORDERS_ALL_FILE_DEFAULT);
+			}
+
+			if (start == -EINVAL) {
+				pr_err("invalid size %s in thp_shmem boot parameter\n",
+				       start_size);
+				goto err;
+			}
+
+			if (end == -EINVAL) {
+				pr_err("invalid size %s in thp_shmem boot parameter\n",
+				       end_size);
+				goto err;
+			}
+
+			if (start < 0 || end < 0 || start > end)
+				goto err;
+
+			nr = end - start + 1;
+			if (!strcmp(policy, "always")) {
+				bitmap_set(&always, start, nr);
+			} else if (!strcmp(policy, "always+exec")) {
+				if (nr != 1)
+					goto err;
+				bitmap_set(&always, start, nr);
+				exec = start;
+			} else if (!strcmp(policy, "never")) {
+				bitmap_clear(&always, start, nr);
+				if (exec != -1 && !test_bit(exec, &always))
+					exec = -1;
+			} else {
+				pr_err("invalid policy %s in thp_file boot parameter\n", policy);
+				goto err;
+			}
+		}
 	}
 
-	if (ret)
-		file_orders_configured = true;
-out:
-	if (!ret)
-		pr_warn("thp_file=%s: cannot parse, ignored\n", str);
-	return ret;
+	huge_file_orders_always = always;
+	huge_file_exec_order = exec;
+	file_orders_configured = true;
+	return 1;
+err:
+	pr_warn("thp_file=%s: cannot parse, ignored\n", str);
+	return 0;
 }
 __setup("thp_file=", setup_thp_file);
 

@@ -1045,6 +1045,7 @@ out_free_interp:
 		unsigned long k, vaddr;
 		unsigned long total_size = 0;
 		unsigned long alignment;
+		int exec_order = file_exec_order();
 
 		if (elf_ppnt->p_type != PT_LOAD)
 			continue;
@@ -1183,6 +1184,9 @@ out_free_interp:
 			 * is then page aligned.
 			 */
 			load_bias = ELF_PAGESTART(load_bias - vaddr);
+			if (exec_order > 0 && interpreter &&
+			    total_size >= (PAGE_SIZE << exec_order))
+				load_bias &= ~((PAGE_SIZE << exec_order) - 1);
 		}
 
 		error = elf_load(bprm->file, load_bias + vaddr, elf_ppnt,

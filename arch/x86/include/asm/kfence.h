@@ -89,6 +89,33 @@ static inline bool kfence_protect_page(unsigned long addr, bool protect)
 	return true;
 }
 
+/* Like pud_free_pmd_page(), but reverse set_memory_4k(). */
+static inline void free_old_pud_pages(pud_t *pud, unsigned long addr)
+{
+	pmd_t *pmd = pud_pgtable(*pud);
+	pte_t *pte;
+	int i;
+
+	/* Revert counting in __split_large_page(). */
+	if (virt_addr_valid(addr)) {
+		unsigned long pfn = PFN_DOWN(__pa(addr));
+
+		if (pfn_range_is_mapped(pfn, pfn + 1)) {
+			update_page_count(PG_LEVEL_1G, 1);
+			update_page_count(PG_LEVEL_4K, -PTRS_PER_PTE * PTRS_PER_PTE);
+		}
+	}
+
+	for (i = 0; i < PTRS_PER_PMD; i++) {
+		if (!pmd_none(pmd[i])) {
+			pte = (pte_t *)pmd_page_vaddr(pmd[i]);
+			free_page((unsigned long)pte);
+		}
+	}
+
+	free_page((unsigned long)pmd);
+}
+
 /*
  * This function is used to recover TLB to 1G kernel mapping.
  * The caller MUST make sure there're no other active kfence
@@ -126,10 +153,7 @@ static inline bool arch_kfence_free_pool(unsigned long addr)
 	old_pud = xchg(pud, new_pud);
 
 	flush_tlb_kernel_range(addr, addr + PUD_SIZE);
-	if (!pud_free_pmd_page(&old_pud, addr)) {
-		pr_warn("free old TLB error at 0x%p-0x%p\n",
-			(void *)addr, (void *)(addr + PUD_SIZE));
-	}
+	free_old_pud_pages(&old_pud, addr);
 
 	return true;
 }

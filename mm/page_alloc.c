@@ -5108,7 +5108,7 @@ unsigned long alloc_pages_bulk_noprof(gfp_t gfp, int preferred_nid,
 	struct per_cpu_pages *pcp;
 	struct list_head *pcp_list;
 	struct alloc_context ac;
-	gfp_t alloc_gfp;
+	gfp_t alloc_gfp, kfence_gfp;
 	unsigned int alloc_flags = ALLOC_WMARK_LOW;
 	int nr_populated = 0, nr_account = 0;
 
@@ -5149,7 +5149,7 @@ unsigned long alloc_pages_bulk_noprof(gfp_t gfp, int preferred_nid,
 
 	/* May set ALLOC_NOFRAGMENT, fragmentation will return 1 page. */
 	gfp &= gfp_allowed_mask;
-	alloc_gfp = gfp;
+	alloc_gfp = kfence_gfp = gfp;
 	if (!prepare_alloc_pages(gfp, 0, preferred_nid, nodemask, &ac, &alloc_gfp, &alloc_flags))
 		goto out;
 	gfp = alloc_gfp;
@@ -5210,7 +5210,7 @@ retry_this_zone:
 			continue;
 		}
 
-		page = kfence_alloc_page(0, preferred_nid, gfp);
+		page = kfence_alloc_page(0, preferred_nid, kfence_gfp);
 		if (likely(!page))
 			page = __rmqueue_pcplist(zone, 0, ac.migratetype, alloc_flags,
 								pcp, pcp_list);
@@ -5283,7 +5283,7 @@ struct page *__alloc_frozen_pages_noprof(gfp_t gfp, unsigned int order,
 	 */
 	alloc_flags |= alloc_flags_nofragment(zonelist_zone(ac.preferred_zoneref), gfp);
 
-	page = kfence_alloc_page(order, preferred_nid, alloc_gfp);
+	page = kfence_alloc_page(order, preferred_nid, gfp);
 	if (unlikely(page)) {
 		prep_new_page(page, 0, alloc_gfp, alloc_flags);
 		goto out;

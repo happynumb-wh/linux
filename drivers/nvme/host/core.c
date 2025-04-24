@@ -730,6 +730,8 @@ void nvme_init_request(struct request *req, struct nvme_command *cmd)
 		req->timeout = NVME_ADMIN_TIMEOUT;
 	}
 
+	req->timeout = req->q->rq_timeout;
+
 	if (!logging_enabled)
 		req->rq_flags |= RQF_QUIET;
 
@@ -5242,10 +5244,11 @@ void nvme_unfreeze(struct nvme_ctrl *ctrl)
 }
 EXPORT_SYMBOL_GPL(nvme_unfreeze);
 
-int nvme_wait_freeze_timeout(struct nvme_ctrl *ctrl, long timeout)
+int nvme_wait_freeze_timeout(struct nvme_ctrl *ctrl)
 {
 	struct nvme_ns *ns;
 	int srcu_idx;
+	long timeout = ctrl->tagset->timeout;
 
 	srcu_idx = srcu_read_lock(&ctrl->srcu);
 	list_for_each_entry_srcu(ns, &ctrl->namespaces, list,

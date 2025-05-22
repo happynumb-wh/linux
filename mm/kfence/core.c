@@ -847,14 +847,24 @@ static struct page *kfence_guarded_alloc_page(int node, unsigned long *stack_ent
 		return NULL;
 	}
 
+	addr = (void *)metadata_to_pageaddr(meta);
+	page = virt_to_page(addr);
+	if (!page_ref_freeze(page, 1)) {
+		/*
+		 * This is extremely unlikely -- someone else has
+		 * taken an extra ref on the page.
+		 */
+		raw_spin_unlock_irqrestore(&meta->lock, flags);
+		put_free_meta(meta);
+		return NULL;
+	}
+
 	__init_meta(meta, PAGE_SIZE, NULL, stack_entries, num_stack_entries, alloc_stack_hash);
 
 	raw_spin_unlock_irqrestore(&meta->lock, flags);
 
-	addr = (void *)meta->addr;
 	alloc_covered_add(alloc_stack_hash, 1);
 
-	page = virt_to_page(addr);
 	if (PageSlab(page)) {
 		struct slab *slab = page_slab(page);
 
@@ -872,9 +882,6 @@ static struct page *kfence_guarded_alloc_page(int node, unsigned long *stack_ent
 		__ClearPageSlab(page);
 	}
 	page->mapping = NULL;
-#ifdef CONFIG_DEBUG_VM
-	atomic_set(&page->_refcount, 0);
-#endif
 
 	if (random_fault)
 		kfence_protect(meta->addr); /* Random "faults" by protecting the object. */
@@ -1039,6 +1046,7 @@ static void kfence_guarded_free_page(struct page *page, void *addr, struct kfenc
 	if (!PageSlab(page))
 		__SetPageSlab(page);
 
+	set_page_refcounted(page);
 	put_free_meta(meta);
 
 	this_cpu_counter->counter[KFENCE_COUNTER_ALLOCATED_PAGE]--;
@@ -1068,7 +1076,6 @@ static void kfence_clear_page_info(unsigned long addr, unsigned long size)
 		}
 		__ClearPageKfence(page);
 		page->mapping = NULL;
-		atomic_set(&page->_refcount, 1);
 		kfence_unprotect(i);
 	}
 }
@@ -1320,7 +1327,18 @@ static void kfence_free_pool_area(struct kfence_pool_area *kpa)
 
 	kmemleak_free_part_phys(base, size);
 	for (; cursor < end; cursor++) {
-		__free_pages_core(pfn_to_page(cursor), 0, MEMINIT_EARLY);
+		struct page *page = pfn_to_page(cursor);
+
+		/*
+		 * This is extremely unlikely -- someone else has
+		 * taken an extra ref on the page.  Just give up
+		 * because of its unlikeliness.
+		 */
+		if (!page_ref_freeze(page, 1)) {
+			WARN_ONCE(1, "kfence: extra page ref!\n");
+			continue;
+		}
+		__free_pages_core(page, 0, MEMINIT_EARLY);
 		totalram_pages_inc();
 	}
 }

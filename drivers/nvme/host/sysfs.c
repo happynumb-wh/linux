@@ -26,14 +26,12 @@ static ssize_t admin_timeout_store(struct device *dev,
 	struct nvme_ctrl *ctrl = dev_get_drvdata(dev);
 
 	ret = kstrtouint(buf, 10, &timeout);
-	if (ret < 0)
-		return ret;
+	if (ret < 0 || timeout == 0)
+		return -EINVAL;
 
-	if (timeout > 0) {
-		timeout = timeout * HZ;
-		ctrl->admin_tagset->timeout = timeout;
-		blk_queue_rq_timeout(ctrl->admin_q, timeout);
-	}
+	timeout = timeout * HZ;
+	ctrl->admin_tagset->timeout = timeout;
+	blk_queue_rq_timeout(ctrl->admin_q, timeout);
 
 	return count;
 }
@@ -56,19 +54,17 @@ static ssize_t io_timeout_store(struct device *dev,
 	struct nvme_ctrl *ctrl = dev_get_drvdata(dev);
 
 	ret = kstrtouint(buf, 10, &timeout);
-	if (ret < 0)
-		return ret;
+	if (ret < 0 || timeout == 0)
+		return -EINVAL;
 
-	if (timeout > 0) {
-		timeout = timeout * HZ;
-		ctrl->tagset->timeout = timeout;
-		srcu_idx = srcu_read_lock(&ctrl->srcu);
-		list_for_each_entry_srcu(ns, &ctrl->namespaces, list,
-					srcu_read_lock_held(&ctrl->srcu)) {
-			blk_queue_rq_timeout(ns->queue, timeout);
-		}
-		srcu_read_unlock(&ctrl->srcu, srcu_idx);
+	timeout = timeout * HZ;
+	ctrl->tagset->timeout = timeout;
+	srcu_idx = srcu_read_lock(&ctrl->srcu);
+	list_for_each_entry_srcu(ns, &ctrl->namespaces, list,
+				srcu_read_lock_held(&ctrl->srcu)) {
+		blk_queue_rq_timeout(ns->queue, timeout);
 	}
+	srcu_read_unlock(&ctrl->srcu, srcu_idx);
 
 	return count;
 }

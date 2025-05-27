@@ -675,6 +675,8 @@ struct request_queue {
 	 */
 	struct mutex		debugfs_mutex;
 
+	bool			enable_d2c_stats;
+
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)
 	CK_KABI_RESERVE(3)
@@ -1178,6 +1180,7 @@ void queue_limits_stack_bdev(struct queue_limits *t, struct block_device *bdev,
 extern void blk_queue_rq_timeout(struct request_queue *, unsigned int);
 extern void blk_queue_rq_hang_threshold(struct request_queue *,
 					unsigned int hang_threshold);
+extern void blk_queue_d2c_stats(struct request_queue *, bool enable);
 
 struct blk_independent_access_ranges *
 disk_alloc_independent_access_ranges(struct gendisk *disk, int nr_ia_ranges);

@@ -34,6 +34,12 @@ void blk_queue_rq_hang_threshold(struct request_queue *q,
 }
 EXPORT_SYMBOL_GPL(blk_queue_rq_hang_threshold);
 
+void blk_queue_d2c_stats(struct request_queue *q, bool enable)
+{
+	WRITE_ONCE(q->enable_d2c_stats, enable);
+}
+EXPORT_SYMBOL_GPL(blk_queue_d2c_stats);
+
 /**
  * blk_set_stacking_limits - set default limits for stacking devices
  * @lim:  the queue_limits structure to reset

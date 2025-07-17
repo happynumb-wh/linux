@@ -14,6 +14,9 @@ static ssize_t admin_timeout_show(struct device *dev, struct device_attribute *a
 {
 	struct nvme_ctrl *ctrl = dev_get_drvdata(dev);
 
+	if (!ctrl->admin_tagset)
+		return -EIO;
+
 	return sysfs_emit(buf, "%u\n", ctrl->admin_tagset->timeout / HZ);
 }
 
@@ -24,6 +27,9 @@ static ssize_t admin_timeout_store(struct device *dev,
 	int ret;
 	unsigned int timeout;
 	struct nvme_ctrl *ctrl = dev_get_drvdata(dev);
+
+	if (!ctrl->admin_tagset)
+		return -EIO;
 
 	ret = kstrtouint(buf, 10, &timeout);
 	if (ret < 0 || timeout == 0)
@@ -41,6 +47,9 @@ static ssize_t io_timeout_show(struct device *dev, struct device_attribute *attr
 {
 	struct nvme_ctrl *ctrl = dev_get_drvdata(dev);
 
+	if (!ctrl->tagset)
+		return -EIO;
+
 	return sysfs_emit(buf, "%u\n", ctrl->tagset->timeout / HZ);
 }
 
@@ -52,6 +61,9 @@ static ssize_t io_timeout_store(struct device *dev,
 	unsigned int timeout;
 	struct nvme_ns *ns;
 	struct nvme_ctrl *ctrl = dev_get_drvdata(dev);
+
+	if (!ctrl->tagset)
+		return -EIO;
 
 	ret = kstrtouint(buf, 10, &timeout);
 	if (ret < 0 || timeout == 0)

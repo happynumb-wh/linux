@@ -5248,7 +5248,12 @@ int nvme_wait_freeze_timeout(struct nvme_ctrl *ctrl)
 {
 	struct nvme_ns *ns;
 	int srcu_idx;
-	long timeout = ctrl->tagset->timeout;
+	long timeout;
+
+	if (ctrl->tagset)
+		timeout = ctrl->tagset->timeout;
+	else
+		timeout = NVME_IO_TIMEOUT;
 
 	srcu_idx = srcu_read_lock(&ctrl->srcu);
 	list_for_each_entry_srcu(ns, &ctrl->namespaces, list,

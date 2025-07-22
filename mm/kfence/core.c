@@ -90,7 +90,14 @@ DEFINE_STATIC_KEY_FALSE(kfence_skip_interval);
 static DEFINE_STATIC_KEY_FALSE(kfence_once_enabled);
 DEFINE_STATIC_KEY_TRUE(kfence_order0_page);
 
-#define KFENCE_MAX_OBJECTS_PER_AREA (PUD_SIZE / PAGE_SIZE / 2 - 1)
+#undef KFENCE_POOL_SIZE
+#ifdef CONFIG_ARM64_64K_PAGES
+/* For 64K page kernel, PUD is too large. Just split PMD table. (512M) */
+#define KFENCE_POOL_SIZE PMD_SIZE
+#else
+#define KFENCE_POOL_SIZE PUD_SIZE
+#endif
+#define KFENCE_MAX_OBJECTS_PER_AREA (KFENCE_POOL_SIZE / PAGE_SIZE / 2 - 1)
 
 static void kfence_enable_late(void);
 static void kfence_disable(void);
@@ -1163,7 +1170,8 @@ static void __init kfence_alloc_pool_node(int node)
 	while (nr_need) {
 		unsigned long kfence_pool_size = (nr_request + 1) * 2 * PAGE_SIZE;
 
-		__kfence_pool_area[index] = memblock_alloc_node(kfence_pool_size, PUD_SIZE, node);
+		__kfence_pool_area[index] = memblock_alloc_node(kfence_pool_size,
+								KFENCE_POOL_SIZE, node);
 		if (!__kfence_pool_area[index]) {
 			pr_err("kfence alloc pool on node %d failed\n", node);
 			break;
@@ -1437,7 +1445,7 @@ static bool kfence_can_recover_tlb(struct kfence_pool_area *kpa)
 {
 #ifdef CONFIG_X86_64
 	/* only recover 1GiB aligned tlb */
-	return kpa->pool_size == PUD_SIZE;
+	return kpa->pool_size == KFENCE_POOL_SIZE;
 #else
 	/*
 	 * On arm64, the direct mapping area is already splited to page granularity
@@ -1453,12 +1461,12 @@ static inline void __kfence_recover_tlb(unsigned long addr)
 {
 	if (!arch_kfence_free_pool(addr))
 		pr_warn("fail to recover tlb to 1G at 0x%p-0x%p\n",
-			(void *)addr, (void *)(addr + PUD_SIZE));
+			(void *)addr, (void *)(addr + KFENCE_POOL_SIZE));
 }
 
 static inline void kfence_recover_tlb(struct kfence_pool_area *kpa)
 {
-	unsigned long base = ALIGN_DOWN((unsigned long)kpa->addr, PUD_SIZE);
+	unsigned long base = ALIGN_DOWN((unsigned long)kpa->addr, KFENCE_POOL_SIZE);
 
 	if (kfence_can_recover_tlb(kpa))
 		__kfence_recover_tlb(base);
@@ -1972,7 +1980,7 @@ int __init update_kfence_booting_max(void)
 {
 	static bool done __initdata;
 
-	unsigned long long parse_mem = PUD_SIZE;
+	unsigned long long parse_mem = KFENCE_POOL_SIZE;
 	unsigned long nr_pages, nr_obj_max;
 	char *cmdline;
 	int ret;
@@ -1995,7 +2003,7 @@ int __init update_kfence_booting_max(void)
 	if (ret)
 		goto nokfence;
 
-	nr_pages = min_t(unsigned long, parse_mem, PUD_SIZE) / PAGE_SIZE;
+	nr_pages = min_t(unsigned long, parse_mem, KFENCE_POOL_SIZE) / PAGE_SIZE;
 	/* We need at least 4 pages to enable KFENCE. */
 	if (nr_pages < 4)
 		goto nokfence;

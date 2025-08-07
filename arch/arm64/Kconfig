@@ -412,6 +412,12 @@ config KASAN_SHADOW_OFFSET
 config UNWIND_TABLES
 	bool
 
+config ARCH_MEMCG_BATCH_SIZE
+	int
+	default 32 if ARM64_64K_PAGES
+	default 64 if ARM64_4K_PAGES
+	default 64
+
 source "arch/arm64/Kconfig.platforms"
 
 menu "Kernel Features"

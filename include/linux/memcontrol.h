@@ -391,7 +391,11 @@ struct mem_cgroup {
  * TODO: maybe necessary to use big numbers in big irons or dynamic based of the
  * workload.
  */
+#ifdef CONFIG_ARCH_MEMCG_BATCH_SIZE
+#define MEMCG_CHARGE_BATCH CONFIG_ARCH_MEMCG_BATCH_SIZE
+#else
 #define MEMCG_CHARGE_BATCH 64U
+#endif
 
 extern struct mem_cgroup *root_mem_cgroup;
 

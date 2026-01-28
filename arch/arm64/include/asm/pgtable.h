@@ -1949,6 +1949,21 @@ static inline void clear_young_dirty_ptes(struct vm_area_struct *vma,
 
 #endif /* CONFIG_ARM64_CONTPTE */
 
+#define PMD_NR (1 << (PMD_SHIFT - PAGE_SHIFT))
+
+#include <linux/migrate_mode.h>
+
+#define get_max_migration_batch get_max_migration_batch
+
+static inline int get_max_migration_batch(int reason)
+{
+	if (IS_ENABLED(CONFIG_ARCH_WANTS_NO_BATCH_MIGRATION) &&
+	    reason == MR_COMPACTION)
+		return 1;
+
+	return PMD_NR;
+}
+
 #endif /* !__ASSEMBLER__ */
 
 #endif /* __ASM_PGTABLE_H */

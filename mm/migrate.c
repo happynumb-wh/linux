@@ -1598,11 +1598,6 @@ static inline int try_split_folio(struct folio *folio, struct list_head *split_f
 	return rc;
 }
 
-#ifdef CONFIG_TRANSPARENT_HUGEPAGE
-#define NR_MAX_BATCHED_MIGRATION	HPAGE_PMD_NR
-#else
-#define NR_MAX_BATCHED_MIGRATION	512
-#endif
 #define NR_MAX_MIGRATE_PAGES_RETRY	10
 #define NR_MAX_MIGRATE_ASYNC_RETRY	3
 #define NR_MAX_MIGRATE_SYNC_RETRY					\
@@ -2094,6 +2089,7 @@ int migrate_pages(struct list_head *from, new_folio_t get_new_folio,
 {
 	int rc, rc_gather;
 	int nr_pages;
+	int nr_max_batch;
 	struct folio *folio, *folio2;
 	LIST_HEAD(folios);
 	LIST_HEAD(ret_folios);
@@ -2109,6 +2105,8 @@ int migrate_pages(struct list_head *from, new_folio_t get_new_folio,
 	if (rc_gather < 0)
 		goto out;
 
+	nr_max_batch = get_max_migration_batch(reason);
+
 again:
 	nr_pages = 0;
 	list_for_each_entry_safe(folio, folio2, from, lru) {
@@ -2119,10 +2117,10 @@ again:
 		}
 
 		nr_pages += folio_nr_pages(folio);
-		if (nr_pages >= NR_MAX_BATCHED_MIGRATION)
+		if (nr_pages >= nr_max_batch)
 			break;
 	}
-	if (nr_pages >= NR_MAX_BATCHED_MIGRATION)
+	if (nr_pages >= nr_max_batch)
 		list_cut_before(&folios, from, &folio2->lru);
 	else
 		list_splice_init(from, &folios);

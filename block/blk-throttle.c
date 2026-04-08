@@ -1304,8 +1304,10 @@ static void blk_throtl_dispatch_work_fn(struct work_struct *work)
 
 	if (!bio_list_empty(&bio_list_on_stack)) {
 		blk_start_plug(&plug);
-		while ((bio = bio_list_pop(&bio_list_on_stack)))
+		while ((bio = bio_list_pop(&bio_list_on_stack))) {
+			bio_set_io_start_time_ns(bio);
 			submit_bio_noacct_nocheck(bio, false);
+		}
 		blk_finish_plug(&plug);
 	}
 }

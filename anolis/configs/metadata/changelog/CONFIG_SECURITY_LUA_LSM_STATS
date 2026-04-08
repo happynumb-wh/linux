@@ -1,0 +1,6 @@
+Enable CONFIG_SECURITY_LUA_LSM_STATS by default together with Lua-LSM on
+architectures that currently provide ARCH_HAS_SETJMP in this backport tree
+(ANBZ: #31935).
+
+Keep it disabled on loongarch, riscv, sw_64-6b, and sw_64-8a until Lua-LSM
+itself can be enabled there.

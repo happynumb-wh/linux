@@ -944,17 +944,17 @@ static unsigned long tg_dispatch_time(struct throtl_grp *tg, struct bio *bio)
 static void throtl_stats_update_completion(struct throtl_grp *tg,
 					   uint64_t start_time,
 					   uint64_t io_start_time,
-					   int op)
+					   blk_opf_t opf)
 {
 	unsigned long flags;
 	uint64_t now = sched_clock();
 
 	local_irq_save(flags);
 	if (time_after64(now, io_start_time))
-		blkg_rwstat_add(&tg->service_time, op, now - io_start_time);
+		blkg_rwstat_add(&tg->service_time, opf, now - io_start_time);
 	if (time_after64(io_start_time, start_time))
-		blkg_rwstat_add(&tg->wait_time, op, io_start_time - start_time);
-	blkg_rwstat_add(&tg->completed, op, 1);
+		blkg_rwstat_add(&tg->wait_time, opf, io_start_time - start_time);
+	blkg_rwstat_add(&tg->completed, opf, 1);
 	local_irq_restore(flags);
 }
 
@@ -973,7 +973,7 @@ static void throtl_bio_end_io(struct bio *bio)
 
 	throtl_stats_update_completion(tg, bio_start_time_ns(bio),
 				       bio_io_start_time_ns(bio),
-				       bio_op(bio));
+				       bio->bi_opf);
 	blkg_put(tg_to_blkg(tg));
 	bio_clear_ext_flag(bio, BIO_THROTL_STATED);
 out:
@@ -1038,9 +1038,9 @@ static void throtl_add_bio_tg(struct bio *bio, struct throtl_qnode *qn,
 	    bio == throtl_peek_queued(&sq->queued[rw]))
 		tg->flags |= THROTL_TG_IOPS_WAS_EMPTY;
 
-	blkg_rwstat_add(&tg->total_bytes_queued, bio_op(bio),
+	blkg_rwstat_add(&tg->total_bytes_queued, bio->bi_opf,
 			throtl_bio_data_size(bio));
-	blkg_rwstat_add(&tg->total_io_queued, bio_op(bio), 1);
+	blkg_rwstat_add(&tg->total_io_queued, bio->bi_opf, 1);
 	throtl_enqueue_tg(tg);
 }
 

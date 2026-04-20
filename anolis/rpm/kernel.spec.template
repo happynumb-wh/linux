@@ -23,9 +23,9 @@
 %define sw_dist_arch -8a
 %else
 %define sw_dist_arch _unknown_sw_arch
-%endif # sw8a architecture
-%endif # sw6b architecture
-%endif # all sw_64 architecture
+%endif
+%endif
+%endif
 
 # Replace '-' with '_' where needed so that variants can use '-' in
 # their name.
@@ -262,6 +262,7 @@ BuildRequires: bzip2, xz, findutils, gzip, m4, perl-interpreter, perl-Carp, perl
 BuildRequires: gcc, binutils, system-rpm-config, hmaccalc, python3-devel
 BuildRequires: net-tools, hostname, bc, bison, flex, elfutils-devel, dwarves
 BuildRequires: libnl3-devel
+BuildRequires: clang, llvm, llvm-devel
 %ifarch x86_64
 BuildRequires: llvm
 %endif
@@ -342,10 +343,6 @@ Source47: kernel-%{version}-aarch64-64k.config
 Source48: kernel-%{version}-aarch64-64k-debug.config
 Source49: kernel-%{version}-riscv64.config
 Source50: kernel-%{version}-riscv64-debug.config
-Source3000: kernel-%{version}-sw_64-6b.config
-Source3001: kernel-%{version}-sw_64-6b-debug.config
-Source3002: kernel-%{version}-sw_64-8a.config
-Source3003: kernel-%{version}-sw_64-8a-debug.config
 
 # Sources for kernel-tools
 Source2000: cpupower.service
@@ -1694,6 +1691,7 @@ fi
 %{_mandir}/man8/bpftool-link.8.*
 %{_mandir}/man8/bpftool-net.8.*
 %{_mandir}/man8/bpftool-struct_ops.8.*
+%{_mandir}/man8/bpftool-token.8.*
 
 %if %{with_debuginfo}
 %files -f bpftool-debuginfo.list -n bpftool-debuginfo
@@ -1702,9 +1700,11 @@ fi
 %endif
 
 # empty meta-package
+%if 0%{?variant:1}
 %ifnarch %nobuildarches noarch
 %files
 %defattr(-,root,root)
+%endif
 %endif
 
 %if %{with_gcov}

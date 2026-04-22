@@ -52,6 +52,7 @@
 #include <linux/time64.h>
 #ifndef COMPILE_OFFSETS
 #include <generated/rq-offsets.h>
+#include <linux/ck_kabi.h>
 #endif
 
 /* task_struct member predeclarations (sorted alphabetically): */
@@ -441,6 +442,11 @@ struct sched_info {
 	struct timespec64		max_run_delay_ts;
 
 #endif /* CONFIG_SCHED_INFO */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 /*
@@ -460,6 +466,11 @@ struct sched_info {
 struct load_weight {
 	unsigned long			weight;
 	u32				inv_weight;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 /*
@@ -517,6 +528,11 @@ struct sched_avg {
 	unsigned long			runnable_avg;
 	unsigned long			util_avg;
 	unsigned int			util_est;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } ____cacheline_aligned;
 
 /*
@@ -570,6 +586,11 @@ struct sched_statistics {
 	u64				core_forceidle_sum;
 #endif
 #endif /* CONFIG_SCHEDSTATS */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } ____cacheline_aligned;
 
 struct sched_entity {
@@ -618,6 +639,15 @@ struct sched_entity {
 	 * collide with read-mostly values above.
 	 */
 	struct sched_avg		avg;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 };
 
 struct sched_rt_entity {
@@ -636,6 +666,11 @@ struct sched_rt_entity {
 	/* rq "owned" by this entity/group: */
 	struct rt_rq			*my_q;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } __randomize_layout;
 
 struct rq_flags;
@@ -746,6 +781,11 @@ struct sched_dl_entity {
 	 */
 	struct sched_dl_entity *pi_se;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #ifdef CONFIG_UCLAMP_TASK
@@ -1646,6 +1686,15 @@ struct task_struct {
 	 * they are included in the randomized portion of task_struct.
 	 */
 	randomized_struct_fields_end
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 } __attribute__ ((aligned (64)));
 
 #ifdef CONFIG_SCHED_PROXY_EXEC

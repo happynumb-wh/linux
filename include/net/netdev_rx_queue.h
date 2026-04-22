@@ -9,6 +9,7 @@
 #include <net/page_pool/types.h>
 #include <net/netdev_queues.h>
 #include <net/rps-types.h>
+#include <linux/ck_kabi.h>
 
 /* This structure contains an instance of an RX queue. */
 struct netdev_rx_queue {
@@ -39,6 +40,15 @@ struct netdev_rx_queue {
 	 */
 	struct netdev_rx_queue		*lease;
 	netdevice_tracker		lease_tracker;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 } ____cacheline_aligned_in_smp;
 
 /*

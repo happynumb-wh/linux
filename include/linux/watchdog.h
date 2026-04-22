@@ -16,6 +16,7 @@
 #include <linux/types.h>
 
 #include <uapi/linux/watchdog.h>
+#include <linux/ck_kabi.h>
 
 struct attribute_group;
 struct device;
@@ -57,6 +58,9 @@ struct watchdog_ops {
 	unsigned int (*get_timeleft)(struct watchdog_device *);
 	int (*restart)(struct watchdog_device *, unsigned long, void *);
 	long (*ioctl)(struct watchdog_device *, unsigned int, unsigned long);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /** struct watchdog_device - The structure that defines a watchdog device
@@ -123,6 +127,9 @@ struct watchdog_device {
 #define WDOG_STOP_ON_UNREGISTER	4	/* Should be stopped on unregister */
 #define WDOG_NO_PING_ON_SUSPEND	5	/* Ping worker should be stopped on suspend */
 	struct list_head deferred;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 #define WATCHDOG_NOWAYOUT		IS_BUILTIN(CONFIG_WATCHDOG_NOWAYOUT)

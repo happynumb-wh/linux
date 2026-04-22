@@ -30,6 +30,7 @@
 #include <linux/workqueue.h>
 #include <net/rtnetlink.h>
 #include <net/neighbour_tables.h>
+#include <linux/ck_kabi.h>
 
 /*
  * NUD stands for "neighbor unreachability detection"
@@ -87,6 +88,8 @@ struct neigh_parms {
 	u32	qlen;
 	int	data[NEIGH_VAR_DATA_MAX];
 	DECLARE_BITMAP(data_state, NEIGH_VAR_DATA_MAX);
+
+	CK_KABI_RESERVE(1)
 };
 
 static inline void neigh_var_set(struct neigh_parms *p, int index, int val)
@@ -166,6 +169,10 @@ struct neighbour {
 	struct rcu_head		rcu;
 	struct net_device	*dev;
 	netdevice_tracker	dev_tracker;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+
 	u8			primary_key[];
 } __randomize_layout;
 
@@ -244,6 +251,15 @@ struct neigh_table {
 	struct neigh_hash_table __rcu *nht;
 	struct mutex		phash_lock;
 	struct pneigh_entry	__rcu **phash_buckets;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 };
 
 static inline int neigh_parms_family(struct neigh_parms *p)

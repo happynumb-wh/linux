@@ -15,6 +15,7 @@
 #include <linux/of.h>
 #include <linux/iova_bitmap.h>
 #include <uapi/linux/iommufd.h>
+#include <linux/ck_kabi.h>
 
 #define IOMMU_READ	(1 << 0)
 #define IOMMU_WRITE	(1 << 1)
@@ -249,6 +250,11 @@ struct iommu_domain {
 			struct list_head next;
 		};
 	};
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 static inline bool iommu_is_dma_domain(struct iommu_domain *domain)
@@ -364,6 +370,9 @@ struct iommu_iotlb_gather {
 	size_t			pgsize;
 	struct iommu_pages_list	freelist;
 	bool			queued;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /**
@@ -713,6 +722,15 @@ struct iommu_ops {
 	struct iommu_domain *release_domain;
 	struct iommu_domain *default_domain;
 	u8 user_pasid_table:1;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 };
 
 /**

@@ -19,6 +19,7 @@
 #include <linux/rhashtable-types.h>
 #include <linux/user_namespace.h>
 #include <uapi/linux/xattr.h>
+#include <linux/ck_kabi.h>
 
 /* List of all open_how "versions". */
 #define XATTR_ARGS_SIZE_VER0	16 /* sizeof first published struct */
@@ -50,6 +51,8 @@ struct xattr_handler {
 		   struct mnt_idmap *idmap, struct dentry *dentry,
 		   struct inode *inode, const char *name, const void *buffer,
 		   size_t size, int flags);
+
+	CK_KABI_RESERVE(1)
 };
 
 /**

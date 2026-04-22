@@ -6,6 +6,7 @@
 #include <linux/netlink.h>
 #include <linux/jiffies.h>
 #include <linux/in6.h>
+#include <linux/ck_kabi.h>
 
 /* ========================================================================
  *         Netlink Messages and Attributes Interface (As Seen On TV)
@@ -384,6 +385,11 @@ struct nla_policy {
 		int (*validate)(const struct nlattr *attr,
 				struct netlink_ext_ack *extack);
 	};
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #define NLA_POLICY_ETH_ADDR		NLA_POLICY_EXACT_LEN(ETH_ALEN)

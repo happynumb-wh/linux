@@ -12,6 +12,7 @@
 
 #include <linux/types.h>
 #include <asm/barrier.h>
+#include <linux/ck_kabi.h>
 
 struct super_block;
 struct dentry;
@@ -60,6 +61,8 @@ struct vfsmount {
 	struct super_block *mnt_sb;	/* pointer to superblock */
 	int mnt_flags;
 	struct mnt_idmap *mnt_idmap;
+
+	CK_KABI_RESERVE(1)
 } __randomize_layout;
 
 static inline struct mnt_idmap *mnt_idmap(const struct vfsmount *mnt)

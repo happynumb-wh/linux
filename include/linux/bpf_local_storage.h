@@ -16,6 +16,7 @@
 #include <linux/bpf_mem_alloc.h>
 #include <uapi/linux/btf.h>
 #include <asm/rqspinlock.h>
+#include <linux/ck_kabi.h>
 
 #define BPF_LOCAL_STORAGE_CACHE_SIZE	16
 
@@ -102,6 +103,8 @@ struct bpf_local_storage {
 	rqspinlock_t lock;	/* Protect adding/removing from the "list" */
 	u64 mem_charge;		/* Copy of mem charged to owner. Protected by "lock" */
 	refcount_t owner_refcnt;/* Used to pin owner when map_free is uncharging */
+
+	CK_KABI_RESERVE(1)
 };
 
 /* U16_MAX is much more than enough for sk local storage

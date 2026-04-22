@@ -13,6 +13,7 @@
 #include <net/snmp.h>
 #include <linux/ipv6.h>
 #include <linux/refcount.h>
+#include <linux/ck_kabi.h>
 
 /* inet6_dev.if_flags */
 
@@ -219,6 +220,23 @@ struct inet6_dev {
 	struct rcu_head		rcu;
 
 	unsigned int		ra_mtu;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
+	CK_KABI_RESERVE(9)
+	CK_KABI_RESERVE(10)
+	CK_KABI_RESERVE(11)
+	CK_KABI_RESERVE(12)
+	CK_KABI_RESERVE(13)
+	CK_KABI_RESERVE(14)
+	CK_KABI_RESERVE(15)
+	CK_KABI_RESERVE(16)
 };
 
 static inline void ipv6_eth_mc_map(const struct in6_addr *addr, char *buf)

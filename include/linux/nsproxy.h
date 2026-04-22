@@ -5,6 +5,7 @@
 #include <linux/refcount.h>
 #include <linux/spinlock.h>
 #include <linux/sched.h>
+#include <linux/ck_kabi.h>
 
 struct mnt_namespace;
 struct uts_namespace;
@@ -39,6 +40,15 @@ struct nsproxy {
 	struct time_namespace *time_ns;
 	struct time_namespace *time_ns_for_children;
 	struct cgroup_namespace *cgroup_ns;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 };
 extern struct nsproxy init_nsproxy;
 

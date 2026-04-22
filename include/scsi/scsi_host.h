@@ -10,6 +10,7 @@
 #include <linux/seq_file.h>
 #include <linux/blk-mq.h>
 #include <scsi/scsi.h>
+#include <linux/ck_kabi.h>
 
 struct block_device;
 struct completion;
@@ -518,6 +519,11 @@ struct scsi_host_template {
 	 *   scsi_netlink.h
 	 */
 	u64 vendor_id;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 /*
@@ -757,6 +763,13 @@ struct Scsi_Host {
 	 * and also because some compilers (m68k) don't automatically force
 	 * alignment to a long boundary.
 	 */
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+
 	unsigned long hostdata[]  /* Used for storage of host specific stuff */
 		__attribute__ ((aligned (sizeof(unsigned long))));
 };

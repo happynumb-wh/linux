@@ -19,6 +19,7 @@
 #include <linux/err.h>
 #include <linux/list.h>
 #include <linux/types.h>
+#include <linux/ck_kabi.h>
 
 enum dev_dma_attr {
 	DEV_DMA_NOT_SUPPORTED,
@@ -59,6 +60,13 @@ struct fwnode_handle {
 	struct list_head suppliers;
 	struct list_head consumers;
 	unsigned long flags;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
 };
 
 /*
@@ -183,6 +191,11 @@ struct fwnode_operations {
 	void __iomem *(*iomap)(struct fwnode_handle *fwnode, int index);
 	int (*irq_get)(const struct fwnode_handle *fwnode, unsigned int index);
 	int (*add_links)(struct fwnode_handle *fwnode);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #define fwnode_has_op(fwnode, op)					\

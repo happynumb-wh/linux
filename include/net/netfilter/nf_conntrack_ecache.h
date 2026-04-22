@@ -13,6 +13,7 @@
 #include <linux/netfilter/nf_conntrack_tuple_common.h>
 #include <net/netfilter/nf_conntrack_extend.h>
 #include <asm/local64.h>
+#include <linux/ck_kabi.h>
 
 enum nf_ct_ecache_state {
 	NFCT_ECACHE_DESTROY_FAIL,	/* tried but failed to send destroy event */
@@ -67,6 +68,8 @@ struct nf_exp_event {
 struct nf_ct_event_notifier {
 	int (*ct_event)(unsigned int events, const struct nf_ct_event *item);
 	int (*exp_event)(unsigned int events, const struct nf_exp_event *item);
+
+	CK_KABI_RESERVE(1)
 };
 
 void nf_conntrack_register_notifier(struct net *net,

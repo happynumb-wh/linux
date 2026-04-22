@@ -9,6 +9,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/bpf.h>
 #include <net/xdp.h>
+#include <linux/ck_kabi.h>
 
 struct xsk_buff_pool;
 struct xdp_rxq_info;
@@ -90,6 +91,10 @@ struct xsk_buff_pool {
 	 * destructor callback.
 	 */
 	spinlock_t cq_prod_lock;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+
 	struct xdp_buff_xsk *free_heads[];
 };
 

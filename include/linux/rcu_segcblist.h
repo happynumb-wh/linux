@@ -16,6 +16,7 @@
 
 #include <linux/types.h>
 #include <linux/atomic.h>
+#include <linux/ck_kabi.h>
 
 /* Simple unsegmented callback lists. */
 struct rcu_cblist {
@@ -198,6 +199,11 @@ struct rcu_segcblist {
 #endif
 	long seglen[RCU_CBLIST_NSEGS];
 	u8 flags;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #define RCU_SEGCBLIST_INITIALIZER(n) \

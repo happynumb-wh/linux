@@ -18,6 +18,7 @@
 #include <linux/types.h>
 #include <linux/time.h>
 #include <linux/uidgid.h>
+#include <linux/ck_kabi.h>
 
 struct kstat {
 	u32		result_mask;	/* What fields the user got */
@@ -59,6 +60,9 @@ struct kstat {
 	u32		atomic_write_unit_max;
 	u32		atomic_write_unit_max_opt;
 	u32		atomic_write_segments_max;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /* These definitions are internal to the kernel for now. Mainly used by nfsd. */

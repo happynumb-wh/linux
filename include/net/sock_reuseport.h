@@ -7,6 +7,7 @@
 #include <linux/types.h>
 #include <linux/spinlock.h>
 #include <net/sock.h>
+#include <linux/ck_kabi.h>
 
 extern spinlock_t reuseport_lock;
 
@@ -26,6 +27,9 @@ struct sock_reuseport {
 	unsigned int		bind_inany:1;
 	unsigned int		has_conns:1;
 	struct bpf_prog __rcu	*prog;		/* optional BPF sock selector */
+
+	CK_KABI_RESERVE(1)
+
 	struct sock		*socks[] __counted_by(max_socks);
 };
 

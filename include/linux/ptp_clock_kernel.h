@@ -13,6 +13,7 @@
 #include <linux/ptp_clock.h>
 #include <linux/timecounter.h>
 #include <linux/skbuff.h>
+#include <linux/ck_kabi.h>
 
 #define PTP_CLOCK_NAME_LEN	32
 /**
@@ -223,6 +224,12 @@ struct ptp_clock_info {
 	long (*do_aux_work)(struct ptp_clock_info *ptp);
 	int (*perout_loopback)(struct ptp_clock_info *ptp, unsigned int index,
 			       int on);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
 };
 
 struct ptp_clock;

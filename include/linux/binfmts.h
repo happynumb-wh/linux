@@ -6,6 +6,7 @@
 #include <linux/unistd.h>
 #include <asm/exec.h>
 #include <uapi/linux/binfmts.h>
+#include <linux/ck_kabi.h>
 
 struct filename;
 struct coredump_params;
@@ -69,6 +70,9 @@ struct linux_binprm {
 	struct rlimit rlim_stack; /* Saved RLIMIT_STACK used during exec. */
 
 	char buf[BINPRM_BUF_SIZE];
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 } __randomize_layout;
 
 #define BINPRM_FLAGS_ENFORCE_NONDUMP_BIT 0

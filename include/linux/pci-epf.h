@@ -14,6 +14,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/msi.h>
 #include <linux/pci.h>
+#include <linux/ck_kabi.h>
 
 struct pci_epf;
 struct pci_epc_features;
@@ -53,6 +54,8 @@ struct pci_epf_header {
 	u16	subsys_vendor_id;
 	u16	subsys_id;
 	enum pci_interrupt_pin interrupt_pin;
+
+	CK_KABI_RESERVE(1)
 };
 
 /**
@@ -150,6 +153,8 @@ struct pci_epf_bar {
 	/* Optional sub-range mapping */
 	unsigned int	num_submap;
 	struct pci_epf_bar_submap	*submap;
+
+	CK_KABI_RESERVE(1)
 };
 
 /**
@@ -223,6 +228,8 @@ struct pci_epf {
 	const struct pci_epc_event_ops *event_ops;
 	struct pci_epf_doorbell_msg *db_msg;
 	u16 num_db;
+
+	CK_KABI_RESERVE(1)
 };
 
 /**

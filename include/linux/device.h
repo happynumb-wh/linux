@@ -32,6 +32,7 @@
 #include <linux/device/driver.h>
 #include <linux/cleanup.h>
 #include <asm/device.h>
+#include <linux/ck_kabi.h>
 
 struct device;
 struct device_private;
@@ -740,6 +741,23 @@ struct device {
 #endif
 
 	DECLARE_BITMAP(flags, DEV_FLAG_COUNT);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
+	CK_KABI_RESERVE(9)
+	CK_KABI_RESERVE(10)
+	CK_KABI_RESERVE(11)
+	CK_KABI_RESERVE(12)
+	CK_KABI_RESERVE(13)
+	CK_KABI_RESERVE(14)
+	CK_KABI_RESERVE(15)
+	CK_KABI_RESERVE(16)
 };
 
 #define __create_dev_flag_accessors(accessor_name, flag_name) \

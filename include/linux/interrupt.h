@@ -20,6 +20,7 @@
 #include <asm/ptrace.h>
 #include <asm/irq.h>
 #include <asm/sections.h>
+#include <linux/ck_kabi.h>
 
 /*
  * These correspond to the IORESOURCE_IRQ_* defines in
@@ -299,6 +300,8 @@ struct irq_affinity {
 	unsigned int	set_size[IRQ_AFFINITY_MAX_SETS];
 	void		(*calc_sets)(struct irq_affinity *, unsigned int nvecs);
 	void		*priv;
+
+	CK_KABI_RESERVE(1)
 };
 
 /**

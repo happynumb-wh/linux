@@ -8,6 +8,7 @@
 #include <linux/btf.h> /* for struct btf and btf_id() */
 #include <linux/filter.h> /* for MAX_BPF_STACK */
 #include <linux/tnum.h>
+#include <linux/ck_kabi.h>
 
 /* Maximum variable offset umax_value permitted when resolving memory accesses.
  * In practice this is far bigger than any realistic pointer offset; this limit
@@ -372,6 +373,8 @@ struct bpf_func_state {
 	 * `stack`. allocated_stack is always a multiple of BPF_REG_SIZE.
 	 */
 	int allocated_stack;
+
+	CK_KABI_RESERVE(1)
 };
 
 #define MAX_CALL_FRAMES 8
@@ -660,6 +663,9 @@ struct bpf_insn_aux_data {
 	u16 const_reg_map_mask;
 	u16 const_reg_subprog_mask;
 	u32 const_reg_vals[10];
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 #define MAX_USED_MAPS 64 /* max number of maps accessed by one eBPF program */
@@ -922,6 +928,11 @@ struct bpf_verifier_env {
 	u32 scc_cnt;
 	struct bpf_iarray *succ;
 	struct bpf_iarray *gotox_tmp_buf;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 static inline struct bpf_func_info_aux *subprog_aux(struct bpf_verifier_env *env, int subprog)

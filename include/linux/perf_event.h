@@ -55,6 +55,7 @@
 #include <linux/lockdep.h>
 
 #include <asm/local.h>
+#include <linux/ck_kabi.h>
 
 struct perf_callchain_entry {
 	u64				nr;
@@ -589,6 +590,11 @@ struct pmu {
 	 * Check period value for PERF_EVENT_IOC_PERIOD ioctl.
 	 */
 	int (*check_period)		(struct perf_event *event, u64 value); /* optional */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 enum perf_addr_filter_action_t {
@@ -932,6 +938,19 @@ struct perf_event {
 	 */
 	u32				orig_type;
 #endif /* CONFIG_PERF_EVENTS */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
+	CK_KABI_RESERVE(9)
+	CK_KABI_RESERVE(10)
+	CK_KABI_RESERVE(11)
+	CK_KABI_RESERVE(12)
 };
 
 /*
@@ -1073,6 +1092,8 @@ struct perf_event_context {
 	 * that until the signal is delivered.
 	 */
 	local_t				nr_no_switch_fast;
+
+	CK_KABI_RESERVE(1)
 };
 
 /**
@@ -1146,6 +1167,8 @@ struct perf_cpu_context {
 	int				heap_size;
 	struct perf_event		**heap;
 	struct perf_event		*heap_default[2];
+
+	CK_KABI_RESERVE(1)
 };
 
 struct perf_output_handle {

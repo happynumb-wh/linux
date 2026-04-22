@@ -17,6 +17,7 @@
 #include <linux/percpu.h>
 #include <asm/text-patching.h>
 #include <asm/insn.h>
+#include <linux/ck_kabi.h>
 
 #define  __ARCH_WANT_KPROBES_INSN_SLOT
 
@@ -80,6 +81,9 @@ struct arch_specific_insn {
 	void (*emulate_op)(struct kprobe *p, struct pt_regs *regs);
 	/* Number of bytes of text poked */
 	int tp_len;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 struct arch_optimized_insn {

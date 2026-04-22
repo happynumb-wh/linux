@@ -22,6 +22,7 @@
 
 /* Internal core VMA manipulation functions. */
 #include "vma.h"
+#include <linux/ck_kabi.h>
 
 struct folio_batch;
 
@@ -1061,6 +1062,9 @@ struct compact_control {
 					 * ensure forward progress.
 					 */
 	bool alloc_contig;		/* alloc_contig_range allocation */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /*

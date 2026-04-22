@@ -15,6 +15,7 @@
 #include <linux/nodemask.h>
 #include <linux/pagemap.h>
 #include <uapi/linux/mempolicy.h>
+#include <linux/ck_kabi.h>
 
 struct mm_struct;
 
@@ -56,6 +57,10 @@ struct mempolicy {
 		nodemask_t user_nodemask;	/* nodemask passed by user */
 	} w;
 	struct rcu_head rcu;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
 };
 
 /*

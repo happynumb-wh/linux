@@ -12,6 +12,7 @@
 #include <linux/nodemask.h>
 #include <linux/shrinker.h>
 #include <linux/xarray.h>
+#include <linux/ck_kabi.h>
 
 struct mem_cgroup;
 
@@ -59,6 +60,9 @@ struct list_lru {
 #ifdef CONFIG_LOCKDEP
 	struct lock_class_key	*key;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 void list_lru_destroy(struct list_lru *lru);

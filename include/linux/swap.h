@@ -15,6 +15,7 @@
 #include <linux/page-flags.h>
 #include <uapi/linux/mempolicy.h>
 #include <asm/page.h>
+#include <linux/ck_kabi.h>
 
 struct notifier_block;
 
@@ -282,6 +283,13 @@ struct swap_info_struct {
 	struct work_struct reclaim_work; /* reclaim worker */
 	struct list_head discard_clusters; /* discard clusters list */
 	struct plist_node avail_list;   /* entry in swap_avail_head */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
 };
 
 static inline swp_entry_t page_swap_entry(struct page *page)

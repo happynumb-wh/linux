@@ -31,6 +31,7 @@
 
 #include <drm/drm_crtc.h>
 #include <drm/drm_encoder.h>
+#include <linux/ck_kabi.h>
 
 /**
  * DOC: overview
@@ -1552,6 +1553,8 @@ struct drm_mode_config_helper_funcs {
 	 * This hook is optional.
 	 */
 	int (*atomic_commit_setup)(struct drm_atomic_state *state);
+
+	CK_KABI_RESERVE(1)
 };
 
 #endif

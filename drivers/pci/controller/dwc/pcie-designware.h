@@ -27,6 +27,7 @@
 #include <linux/pci-epf.h>
 
 #include "../../pci.h"
+#include <linux/ck_kabi.h>
 
 /* DWC PCIe IP-core versions (native support since v4.70a) */
 #define DW_PCIE_VER_365A		0x3336352a
@@ -467,6 +468,8 @@ struct dw_pcie_ep_ops {
 	 */
 	unsigned int (*get_dbi_offset)(struct dw_pcie_ep *ep, u8 func_no);
 	unsigned int (*get_dbi2_offset)(struct dw_pcie_ep *ep, u8 func_no);
+
+	CK_KABI_RESERVE(1)
 };
 
 struct dw_pcie_ep_func {
@@ -499,6 +502,8 @@ struct dw_pcie_ep {
 	bool			msi_iatu_mapped;
 	u64			msi_msg_addr;
 	size_t			msi_map_size;
+
+	CK_KABI_RESERVE(1)
 };
 
 struct dw_pcie_ops {
@@ -513,6 +518,8 @@ struct dw_pcie_ops {
 	enum dw_pcie_ltssm (*get_ltssm)(struct dw_pcie *pcie);
 	int	(*start_link)(struct dw_pcie *pcie);
 	void	(*stop_link)(struct dw_pcie *pcie);
+
+	CK_KABI_RESERVE(1)
 };
 
 struct debugfs_info {

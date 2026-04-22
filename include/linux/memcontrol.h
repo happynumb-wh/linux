@@ -23,6 +23,7 @@
 #include <linux/writeback.h>
 #include <linux/page-flags.h>
 #include <linux/shrinker.h>
+#include <linux/ck_kabi.h>
 
 struct mem_cgroup;
 struct obj_cgroup;
@@ -68,6 +69,8 @@ struct mem_cgroup_reclaim_cookie {
 struct mem_cgroup_private_id {
 	int id;
 	refcount_t ref;
+
+	CK_KABI_RESERVE(1)
 };
 
 struct memcg_vmstats_percpu;
@@ -130,6 +133,11 @@ struct mem_cgroup_per_node {
 	atomic_t		slab_reclaimable;
 	atomic_t		slab_unreclaimable;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 struct mem_cgroup_threshold {
@@ -322,6 +330,15 @@ struct mem_cgroup {
 	struct list_head event_list;
 	spinlock_t event_list_lock;
 #endif /* CONFIG_MEMCG_V1 */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 
 	struct mem_cgroup_per_node *nodeinfo[];
 };

@@ -8,6 +8,7 @@
 #define _ARM_PROBES_H
 
 #include <asm/insn.h>
+#include <linux/ck_kabi.h>
 
 typedef void (probes_handler_t) (u32 opcode, long addr, struct pt_regs *);
 
@@ -21,6 +22,9 @@ struct arch_specific_insn {
 	kprobe_opcode_t *xol_insn;
 	/* restore address after step xol */
 	unsigned long xol_restore;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 #endif
 

@@ -4,6 +4,7 @@
 
 #include <linux/lockdep_types.h>
 #include <linux/types.h>
+#include <linux/ck_kabi.h>
 
 struct timer_list {
 	/*
@@ -18,6 +19,11 @@ struct timer_list {
 #ifdef CONFIG_LOCKDEP
 	struct lockdep_map	lockdep_map;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #endif /* _LINUX_TIMER_TYPES_H */

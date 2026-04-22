@@ -16,6 +16,7 @@
 #include <linux/cpumask_types.h>
 #include <linux/rcupdate.h>
 #include <linux/workqueue_types.h>
+#include <linux/ck_kabi.h>
 
 /*
  * The first word is the work queue pointer and the flags rolled into
@@ -118,6 +119,11 @@ struct delayed_work {
 	/* target workqueue and CPU ->timer uses to queue ->work */
 	struct workqueue_struct *wq;
 	int cpu;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 struct rcu_work {

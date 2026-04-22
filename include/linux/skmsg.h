@@ -12,6 +12,7 @@
 #include <net/sock.h>
 #include <net/tcp.h>
 #include <net/strparser.h>
+#include <linux/ck_kabi.h>
 
 #define MAX_MSG_FRAGS			MAX_SKB_FRAGS
 #define NR_MSG_FRAG_IDS			(MAX_MSG_FRAGS + 1)
@@ -121,6 +122,11 @@ struct sk_psock {
 	struct delayed_work		work;
 	struct sock			*sk_pair;
 	struct rcu_work			rwork;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 int sk_msg_alloc(struct sock *sk, struct sk_msg *msg, int len,

@@ -6,6 +6,7 @@
 #define __NETNS_UNIX_H__
 
 #include <linux/spinlock.h>
+#include <linux/ck_kabi.h>
 
 struct unix_table {
 	spinlock_t		*locks;
@@ -17,6 +18,9 @@ struct netns_unix {
 	struct unix_table	table;
 	int			sysctl_max_dgram_qlen;
 	struct ctl_table_header	*ctl;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 #endif /* __NETNS_UNIX_H__ */

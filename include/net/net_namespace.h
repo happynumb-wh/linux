@@ -44,6 +44,7 @@
 #include <linux/skbuff.h>
 #include <linux/notifier.h>
 #include <linux/xarray.h>
+#include <linux/ck_kabi.h>
 
 struct user_namespace;
 struct proc_dir_entry;
@@ -201,6 +202,11 @@ struct net {
 #if IS_ENABLED(CONFIG_VSOCKETS)
 	struct netns_vsock	vsock;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } __randomize_layout;
 
 #include <linux/seq_file_net.h>

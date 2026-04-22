@@ -13,6 +13,7 @@
 #include <linux/workqueue.h>
 
 #include <asm/video.h>
+#include <linux/ck_kabi.h>
 
 struct backlight_device;
 struct device;
@@ -220,6 +221,8 @@ struct fb_deferred_io {
 	/* callback */
 	struct page *(*get_page)(struct fb_info *info, unsigned long offset);
 	void (*deferred_io)(struct fb_info *info, struct list_head *pagelist);
+
+	CK_KABI_RESERVE(1)
 };
 
 struct fb_deferred_io_state;

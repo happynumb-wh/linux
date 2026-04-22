@@ -14,6 +14,7 @@
 #include <linux/pagemap.h>
 #include <linux/memremap.h>
 #include <linux/bit_spinlock.h>
+#include <linux/ck_kabi.h>
 
 /*
  * The anon_vma heads a list of private "related" vmas, to scan if
@@ -65,6 +66,8 @@ struct anon_vma {
 
 	/* Interval tree of private "related" vmas */
 	struct rb_root_cached rb_root;
+
+	CK_KABI_RESERVE(1)
 };
 
 /*

@@ -8,6 +8,7 @@
 #define _LINUX_DELAYACCT_H
 
 #include <uapi/linux/taskstats.h>
+#include <linux/ck_kabi.h>
 
 #ifdef CONFIG_TASK_DELAY_ACCT
 struct task_delay_info {
@@ -77,6 +78,13 @@ struct task_delay_info {
 	struct timespec64 compact_delay_max_ts;
 	struct timespec64 wpcopy_delay_max_ts;
 	struct timespec64 irq_delay_max_ts;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
 };
 #endif
 

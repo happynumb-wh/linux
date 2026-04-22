@@ -21,6 +21,7 @@
 #include <uapi/linux/ethtool.h>
 #include <uapi/linux/ethtool_netlink_generated.h>
 #include <uapi/linux/net_tstamp.h>
+#include <linux/ck_kabi.h>
 
 #define ETHTOOL_MM_MAX_VERIFY_TIME_MS		128
 #define ETHTOOL_MM_MAX_VERIFY_RETRIES		3
@@ -278,6 +279,8 @@ struct ethtool_link_ksettings {
 		__ETHTOOL_DECLARE_LINK_MODE_MASK(lp_advertising);
 	} link_modes;
 	u32	lanes;
+
+	CK_KABI_RESERVE(1)
 };
 
 /**
@@ -535,6 +538,8 @@ struct ethtool_pause_stats {
 		u64 rx_pause_frames;
 		u64 tx_pause_storm_events;
 	);
+
+	CK_KABI_RESERVE(1)
 };
 
 #define ETHTOOL_MAX_LANES	8
@@ -1319,6 +1324,23 @@ struct ethtool_ops {
 	int	(*set_mm)(struct net_device *dev, struct ethtool_mm_cfg *cfg,
 			  struct netlink_ext_ack *extack);
 	void	(*get_mm_stats)(struct net_device *dev, struct ethtool_mm_stats *stats);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
+	CK_KABI_RESERVE(9)
+	CK_KABI_RESERVE(10)
+	CK_KABI_RESERVE(11)
+	CK_KABI_RESERVE(12)
+	CK_KABI_RESERVE(13)
+	CK_KABI_RESERVE(14)
+	CK_KABI_RESERVE(15)
+	CK_KABI_RESERVE(16)
 };
 
 int ethtool_check_ops(const struct ethtool_ops *ops);

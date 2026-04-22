@@ -16,6 +16,7 @@
 #include <linux/debug_locks.h>
 #include <linux/rtmutex.h>
 #include <linux/sched/wake_q.h>
+#include <linux/ck_kabi.h>
 
 
 /*
@@ -56,6 +57,8 @@ struct rt_mutex_waiter {
 	struct rt_mutex_base	*lock;
 	unsigned int		wake_state;
 	struct ww_acquire_ctx	*ww_ctx;
+
+	CK_KABI_RESERVE(1)
 };
 
 /**

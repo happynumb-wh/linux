@@ -24,6 +24,7 @@
 #include <linux/bitmap.h>
 
 #include <asm/mmu.h>
+#include <linux/ck_kabi.h>
 
 #ifndef AT_VECTOR_SIZE_ARCH
 #define AT_VECTOR_SIZE_ARCH 0
@@ -1072,6 +1073,11 @@ struct vm_area_struct {
 #ifdef __HAVE_PFNMAP_TRACKING
 	struct pfnmap_track_ctx *pfnmap_track_ctx;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } __randomize_layout;
 
 /* Clears all bits in the VMA flags bitmap, non-atomically. */
@@ -1425,6 +1431,15 @@ struct mm_struct {
 		mm_id_t mm_id;
 #endif /* CONFIG_MM_ID */
 	} __randomize_layout;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 
 	/*
 	 * The mm_cpumask needs to be at the end of mm_struct, because it

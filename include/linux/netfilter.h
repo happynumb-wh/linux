@@ -16,6 +16,7 @@
 #include <linux/netdevice.h>
 #include <linux/sockptr.h>
 #include <net/net_namespace.h>
+#include <linux/ck_kabi.h>
 
 static inline int NF_DROP_GETERR(int verdict)
 {
@@ -193,6 +194,8 @@ struct nf_sockopt_ops {
 	int (*get)(struct sock *sk, int optval, void __user *user, int *len);
 	/* Use the module struct to lock set/get code in place */
 	struct module *owner;
+
+	CK_KABI_RESERVE(1)
 };
 
 /* Function to register/unregister hook points. */

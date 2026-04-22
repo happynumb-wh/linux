@@ -11,6 +11,7 @@
 #include <linux/device.h>
 #include <linux/ktime.h>
 #include <linux/rw_hint.h>
+#include <linux/ck_kabi.h>
 
 struct bio_set;
 struct bio;
@@ -79,6 +80,11 @@ struct block_device {
 	 * path
 	 */
 	struct device		bd_device;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } __randomize_layout;
 
 #define bdev_whole(_bdev) \
@@ -284,6 +290,11 @@ struct bio {
 	atomic_t		__bi_cnt;	/* pin count */
 
 	struct bio_set		*bi_pool;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #define BIO_RESET_BYTES		offsetof(struct bio, bi_max_vecs)

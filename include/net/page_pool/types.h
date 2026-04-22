@@ -8,6 +8,7 @@
 #include <linux/types.h>
 #include <linux/xarray.h>
 #include <net/netmem.h>
+#include <linux/ck_kabi.h>
 
 #define PP_FLAG_DMA_MAP		BIT(0) /* Should page_pool do the DMA
 					* map/unmap
@@ -103,6 +104,9 @@ struct page_pool_params {
 		void (*init_callback)(netmem_ref netmem, void *arg);
 		void *init_arg;
 	);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 #ifdef CONFIG_PAGE_POOL_STATS
@@ -259,6 +263,8 @@ struct page_pool {
 		ktime_t detach_time;
 		u32 id;
 	} user;
+
+	CK_KABI_RESERVE(1)
 };
 
 struct page *page_pool_alloc_pages(struct page_pool *pool, gfp_t gfp);

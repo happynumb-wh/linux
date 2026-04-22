@@ -11,6 +11,7 @@
 #include <linux/rcupdate.h>
 #include <linux/seqlock.h>
 #include <linux/siphash.h>
+#include <linux/ck_kabi.h>
 
 struct ctl_table_header;
 struct ipv4_devconf;
@@ -298,6 +299,11 @@ struct netns_ipv4 {
 	siphash_key_t	ip_id_key;
 	struct hlist_head	*inet_addr_lst;
 	struct delayed_work	addr_chk_work;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #endif

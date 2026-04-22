@@ -11,6 +11,7 @@
 #include <linux/workqueue.h>
 #include <linux/kthread.h>
 #include <linux/preempt.h>
+#include <linux/ck_kabi.h>
 
 struct worker_pool;
 
@@ -60,6 +61,11 @@ struct worker {
 
 	/* used only by rescuers to point to the target workqueue */
 	struct workqueue_struct	*rescue_wq;	/* I: the workqueue to rescue */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 /**

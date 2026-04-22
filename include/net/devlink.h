@@ -20,6 +20,7 @@
 #include <uapi/linux/devlink.h>
 #include <linux/xarray.h>
 #include <linux/firmware.h>
+#include <linux/ck_kabi.h>
 
 struct devlink;
 struct devlink_linecard;
@@ -1607,6 +1608,15 @@ struct devlink_ops {
 	enum devlink_selftest_status
 	(*selftest_run)(struct devlink *devlink, unsigned int id,
 			struct netlink_ext_ack *extack);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 };
 
 void *devlink_priv(struct devlink *devlink);

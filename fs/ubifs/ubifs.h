@@ -36,6 +36,7 @@
 #include <linux/fscrypt.h>
 
 #include "ubifs-media.h"
+#include <linux/ck_kabi.h>
 
 /* Version of this UBIFS implementation */
 #define UBIFS_VERSION 1
@@ -420,6 +421,9 @@ struct ubifs_inode {
 #ifdef CONFIG_FS_ENCRYPTION
 	struct fscrypt_inode_info *i_crypt_info;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /**
@@ -1511,6 +1515,15 @@ struct ubifs_info {
 
 	struct ubifs_debug_info *dbg;
 	struct ubifs_stats_info *stats;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 };
 
 extern struct list_head ubifs_infos;

@@ -25,6 +25,7 @@
 #include <linux/zswap.h>
 #include <linux/sizes.h>
 #include <asm/page.h>
+#include <linux/ck_kabi.h>
 
 /* Free memory management - zoned buddy allocator.  */
 #ifndef CONFIG_ARCH_FORCE_MAX_ORDER
@@ -783,6 +784,8 @@ struct lruvec {
 	struct pglist_data *pgdat;
 #endif
 	struct zswap_lruvec_state zswap_lruvec_state;
+
+	CK_KABI_RESERVE(1)
 };
 
 /* Isolate for asynchronous migration */
@@ -865,6 +868,8 @@ struct per_cpu_zonestat {
 struct per_cpu_nodestat {
 	s8 stat_threshold;
 	s8 vm_node_stat_diff[NR_VM_NODE_STAT_ITEMS];
+
+	CK_KABI_RESERVE(1)
 };
 
 #endif /* !__GENERATING_BOUNDS.H */
@@ -1148,6 +1153,11 @@ struct zone {
 #ifdef CONFIG_HUGETLB_PAGE_OPTIMIZE_VMEMMAP
 	struct page *vmemmap_tails[NR_VMEMMAP_TAILS];
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } ____cacheline_internodealigned_in_smp;
 
 enum pgdat_flags {
@@ -1609,6 +1619,11 @@ typedef struct pglist_data {
 #ifdef CONFIG_MEMORY_FAILURE
 	struct memory_failure_stats mf_stats;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } pg_data_t;
 
 #define node_present_pages(nid)	(NODE_DATA(nid)->node_present_pages)

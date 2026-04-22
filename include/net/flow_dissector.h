@@ -8,6 +8,7 @@
 #include <linux/string.h>
 #include <uapi/linux/if_ether.h>
 #include <uapi/linux/pkt_cls.h>
+#include <linux/ck_kabi.h>
 
 struct bpf_prog;
 struct net;
@@ -395,6 +396,8 @@ struct flow_dissector {
 	unsigned long long  used_keys;
 		/* each bit represents presence of one key id */
 	unsigned short int offset[FLOW_DISSECTOR_KEY_MAX];
+
+	CK_KABI_RESERVE(1)
 };
 
 struct flow_keys_basic {

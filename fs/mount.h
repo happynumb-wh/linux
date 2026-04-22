@@ -4,6 +4,7 @@
 #include <linux/poll.h>
 #include <linux/ns_common.h>
 #include <linux/fs_pin.h>
+#include <linux/ck_kabi.h>
 
 extern struct file_system_type nullfs_fs_type;
 extern struct list_head notify_list;
@@ -91,6 +92,8 @@ struct mount {
 	struct hlist_head mnt_pins;
 	struct hlist_head mnt_stuck_children;
 	struct mount *overmount;	/* mounted on ->mnt_root */
+
+	CK_KABI_RESERVE(1)
 } __randomize_layout;
 
 enum {

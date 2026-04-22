@@ -6,6 +6,7 @@
 #include <linux/kobject.h>
 #include <linux/mutex.h>
 #include <linux/rcupdate.h>
+#include <linux/ck_kabi.h>
 
 /*
  * Core internal functions to deal with irq descriptors
@@ -130,6 +131,11 @@ struct irq_desc {
 #ifdef CONFIG_HARDIRQS_SW_RESEND
 	struct hlist_node	resend_node;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } ____cacheline_internodealigned_in_smp;
 
 #ifdef CONFIG_SPARSE_IRQ

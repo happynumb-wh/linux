@@ -32,6 +32,7 @@
 #include <linux/memcontrol.h>
 #include <linux/cfi.h>
 #include <asm/rqspinlock.h>
+#include <linux/ck_kabi.h>
 
 struct bpf_verifier_env;
 struct bpf_verifier_log;
@@ -184,6 +185,11 @@ struct bpf_map_ops {
 
 	/* bpf_iter info used to open a seq_file */
 	const struct bpf_iter_seq_info *iter_seq_info;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 enum {
@@ -336,6 +342,11 @@ struct bpf_map {
 	s64 __percpu *elem_count;
 	u64 cookie; /* write-once */
 	char *excl_prog_sha;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 static inline const char *btf_field_type_name(enum btf_field_type type)
@@ -1056,6 +1067,9 @@ struct bpf_insn_access_aux {
 	};
 	struct bpf_verifier_log *log; /* for verbose logs */
 	bool is_retval; /* is accessing function return value ? */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 static inline void
@@ -1171,6 +1185,9 @@ struct btf_func_model {
 	u8 nr_args;
 	u8 arg_size[MAX_BPF_FUNC_ARGS];
 	u8 arg_flags[MAX_BPF_FUNC_ARGS];
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /* Restore arguments before returning from trampoline to let original function
@@ -1305,6 +1322,8 @@ struct bpf_ksym {
 	bool			 prog;
 	u32			 fp_start;
 	u32			 fp_end;
+
+	CK_KABI_RESERVE(1)
 };
 
 enum bpf_tramp_prog_type {
@@ -1327,6 +1346,8 @@ struct bpf_tramp_image {
 		struct rcu_head rcu;
 		struct work_struct work;
 	};
+
+	CK_KABI_RESERVE(1)
 };
 
 struct bpf_trampoline {
@@ -1357,6 +1378,9 @@ struct bpf_trampoline {
 	int progs_cnt[BPF_TRAMP_MAX];
 	/* Executable image of trampoline */
 	struct bpf_tramp_image *cur_image;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 struct bpf_attach_target_info {
@@ -1770,6 +1794,11 @@ struct bpf_prog_aux {
 	struct bpf_stream stream[2];
 	struct mutex st_ops_assoc_mutex;
 	struct bpf_map __rcu *st_ops_assoc;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #define BPF_NR_CONTEXTS        4       /* normal, softirq, hardirq, NMI */
@@ -1806,6 +1835,12 @@ struct bpf_prog {
 					    const struct bpf_insn *insn);
 	struct bpf_prog_aux	*aux;		/* Auxiliary fields */
 	struct sock_fprog_kern	*orig_prog;	/* Original BPF program */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+
 	/* Instructions for interpreter */
 	union {
 		DECLARE_FLEX_ARRAY(struct sock_filter, insns);
@@ -1871,6 +1906,8 @@ struct bpf_link_ops {
 	int (*update_map)(struct bpf_link *link, struct bpf_map *new_map,
 			  struct bpf_map *old_map);
 	__poll_t (*poll)(struct file *file, struct poll_table_struct *pts);
+
+	CK_KABI_RESERVE(1)
 };
 
 struct bpf_tramp_link {
@@ -2829,6 +2866,10 @@ struct bpf_iter_aux_info {
 		enum bpf_iter_task_type	type;
 		u32 pid;
 	} task;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
 };
 
 typedef int (*bpf_iter_attach_target_t)(struct bpf_prog *prog,

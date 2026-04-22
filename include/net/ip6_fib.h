@@ -21,6 +21,7 @@
 #include <net/fib_notifier.h>
 #include <linux/indirect_call_wrapper.h>
 #include <uapi/linux/bpf.h>
+#include <linux/ck_kabi.h>
 
 #ifdef CONFIG_IPV6_MULTIPLE_TABLES
 #define FIB6_TABLE_HASHSZ 256
@@ -78,6 +79,8 @@ struct fib6_node {
 	int			fn_sernum;
 	struct fib6_info __rcu	*rr_ptr;
 	struct rcu_head		rcu;
+
+	CK_KABI_RESERVE(1)
 };
 
 struct fib6_gc_args {
@@ -201,6 +204,9 @@ struct fib6_info {
 	struct list_head		purge_link;
 	struct rcu_head			rcu;
 	struct nexthop			*nh;
+
+	CK_KABI_RESERVE(1)
+
 	struct fib6_nh			fib6_nh[];
 };
 
@@ -217,6 +223,8 @@ struct rt6_info {
 
 	/* more non-fragment space at head required */
 	unsigned short			rt6i_nfheader_len;
+
+	CK_KABI_RESERVE(1)
 };
 
 struct fib6_result {

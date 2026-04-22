@@ -11,6 +11,7 @@
 #include <net/rtnetlink.h>
 #include <net/fib_notifier.h>
 #include <linux/indirect_call_wrapper.h>
+#include <linux/ck_kabi.h>
 
 struct fib_kuid_range {
 	kuid_t start;
@@ -48,6 +49,15 @@ struct fib_rule {
 	u8                      iif_is_l3_master;
 	u8                      oif_is_l3_master;
 	struct rcu_head		rcu;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 };
 
 struct fib_lookup_arg {

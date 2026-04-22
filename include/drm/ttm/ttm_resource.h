@@ -33,6 +33,7 @@
 
 #include <drm/ttm/ttm_caching.h>
 #include <drm/ttm/ttm_kmap_iter.h>
+#include <linux/ck_kabi.h>
 
 #define TTM_MAX_BO_PRIORITY	4U
 #define TTM_NUM_MEM_TYPES 9
@@ -227,6 +228,9 @@ struct ttm_resource_manager {
 	 * @cg: &dmem_cgroup_region used for memory accounting, if not NULL.
 	 */
 	struct dmem_cgroup_region *cg;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /**

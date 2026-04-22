@@ -3,6 +3,7 @@
 #define _LINUX_FILELOCK_H
 
 #include <linux/fs.h>
+#include <linux/ck_kabi.h>
 
 #define FL_POSIX	1
 #define FL_FLOCK	2
@@ -32,6 +33,9 @@ struct file_lease;
 struct file_lock_operations {
 	void (*fl_copy_lock)(struct file_lock *, struct file_lock *);
 	void (*fl_release_private)(struct file_lock *);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 struct lock_manager_operations {
@@ -42,6 +46,11 @@ struct lock_manager_operations {
 	int (*lm_grant)(struct file_lock *, int);
 	bool (*lm_lock_expirable)(struct file_lock *cfl);
 	void (*lm_expire_lock)(void);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 struct lease_manager_operations {
@@ -130,6 +139,8 @@ struct file_lock {
 			struct inode *inode;
 		} ceph;
 	} fl_u;
+
+	CK_KABI_RESERVE(1)
 } __randomize_layout;
 
 struct file_lease {

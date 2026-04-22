@@ -9,6 +9,7 @@
 #include <linux/netlink.h>
 #include <net/netlink.h>
 #include <linux/u64_stats_sync.h>
+#include <linux/ck_kabi.h>
 
 struct macvlan_port;
 
@@ -35,6 +36,9 @@ struct macvlan_dev {
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	struct netpoll		*netpoll;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 static inline void macvlan_count_rx(const struct macvlan_dev *vlan,

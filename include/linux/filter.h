@@ -27,6 +27,7 @@
 
 #include <asm/byteorder.h>
 #include <uapi/linux/filter.h>
+#include <linux/ck_kabi.h>
 
 struct sk_buff;
 struct sock;
@@ -671,6 +672,9 @@ struct bpf_prog_stats {
 	u64_stats_t nsecs;
 	u64_stats_t misses;
 	struct u64_stats_sync syncp;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 } __aligned(2 * sizeof(u64));
 
 struct bpf_timed_may_goto {

@@ -39,6 +39,7 @@
 #include <net/net_debug.h>
 #include <net/dropreason-core.h>
 #include <net/netmem.h>
+#include <linux/ck_kabi.h>
 
 /**
  * DOC: skb checksums
@@ -1100,6 +1101,10 @@ struct sk_buff {
 	/* only usable after checking ->active_extensions != 0 */
 	struct skb_ext		*extensions;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
 };
 
 /* if you move pkt_type around you also must adapt those constants */

@@ -49,6 +49,7 @@
 #include <linux/memcontrol.h>
 #include <linux/bpf-cgroup.h>
 #include <linux/siphash.h>
+#include <linux/ck_kabi.h>
 
 extern struct inet_hashinfo tcp_hashinfo;
 
@@ -1310,6 +1311,9 @@ struct rate_sample {
 	bool is_app_limited;	/* is sample from packet with bubble in pipe? */
 	bool is_retrans;	/* is sample from retransmission? */
 	bool is_ack_delayed;	/* is this (likely) a delayed ACK? */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 struct tcp_congestion_ops {
@@ -1374,6 +1378,11 @@ struct tcp_congestion_ops {
 	void (*init)(struct sock *sk);
 	/* cleanup private data  (optional) */
 	void (*release)(struct sock *sk);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } ____cacheline_aligned_in_smp;
 
 int tcp_register_congestion_control(struct tcp_congestion_ops *type);

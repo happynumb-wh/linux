@@ -17,6 +17,7 @@
 #include <linux/util_macros.h>
 #include <linux/wait.h>
 #include <linux/workqueue_types.h>
+#include <linux/ck_kabi.h>
 
 /*
  * Callbacks for platform drivers to implement.
@@ -643,6 +644,13 @@ struct pm_subsys_data {
 #ifdef CONFIG_PM_GENERIC_DOMAINS
 	struct pm_domain_data *domain_data;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
 };
 
 /*
@@ -728,6 +736,9 @@ struct dev_pm_info {
 	void (*set_latency_tolerance)(struct device *, s32);
 	struct dev_pm_qos	*qos;
 	bool			detach_power_off:1;	/* Owned by the driver core */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 extern int dev_pm_get_subsys_data(struct device *dev);
@@ -756,6 +767,9 @@ struct dev_pm_domain {
 	void (*sync)(struct device *dev);
 	void (*dismiss)(struct device *dev);
 	int (*set_performance_state)(struct device *dev, unsigned int state);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /*

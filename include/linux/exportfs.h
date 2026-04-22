@@ -4,6 +4,7 @@
 
 #include <linux/types.h>
 #include <linux/path.h>
+#include <linux/ck_kabi.h>
 
 struct dentry;
 struct iattr;
@@ -308,6 +309,9 @@ struct export_operations {
 #define EXPORT_OP_FLUSH_ON_CLOSE	(0x20) /* fs flushes file data on close */
 #define EXPORT_OP_NOLOCKS		(0x40) /* no file locking support */
 	unsigned long	flags;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /**

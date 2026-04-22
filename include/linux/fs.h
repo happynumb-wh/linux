@@ -50,6 +50,7 @@
 
 #include <asm/byteorder.h>
 #include <uapi/linux/fs.h>
+#include <linux/ck_kabi.h>
 
 struct bdi_writeback;
 struct bio;
@@ -439,6 +440,11 @@ struct address_space_operations {
 				sector_t *span);
 	void (*swap_deactivate)(struct file *file);
 	int (*swap_rw)(struct kiocb *iocb, struct iov_iter *iter);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 extern const struct address_space_operations empty_aops;
@@ -488,6 +494,11 @@ struct address_space {
 	errseq_t		wb_err;
 	spinlock_t		i_private_lock;
 	struct rw_semaphore	i_mmap_rwsem;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } __attribute__((aligned(sizeof(long)))) __randomize_layout;
 	/*
 	 * On most architectures that alignment is already the case; but
@@ -873,6 +884,9 @@ struct inode {
 #endif
 
 	void			*i_private; /* fs or device private pointer */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 } __randomize_layout;
 
 /*
@@ -1967,6 +1981,11 @@ struct file_operations {
 	int (*uring_cmd_iopoll)(struct io_uring_cmd *, struct io_comp_batch *,
 				unsigned int poll_flags);
 	int (*mmap_prepare)(struct vm_area_desc *);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } __randomize_layout;
 
 /* Supports async buffered reads */
@@ -2041,6 +2060,11 @@ struct inode_operations {
 			    struct dentry *dentry, struct file_kattr *fa);
 	int (*fileattr_get)(struct dentry *dentry, struct file_kattr *fa);
 	struct offset_ctx *(*get_offset_ctx)(struct inode *inode);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } ____cacheline_aligned;
 
 /* Did the driver provide valid mmap hook configuration? */
@@ -2298,6 +2322,11 @@ struct file_system_type {
 	struct lock_class_key i_mutex_key;
 	struct lock_class_key invalidate_lock_key;
 	struct lock_class_key i_mutex_dir_key;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #define MODULE_ALIAS_FS(NAME) MODULE_ALIAS("fs-" NAME)

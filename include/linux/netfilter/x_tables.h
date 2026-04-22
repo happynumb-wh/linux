@@ -7,6 +7,7 @@
 #include <linux/static_key.h>
 #include <linux/netfilter.h>
 #include <uapi/linux/netfilter/x_tables.h>
+#include <linux/ck_kabi.h>
 
 /* Test a struct->invflags and a boolean for inequality */
 #define NF_INVF(ptr, flag, boolean)					\
@@ -207,6 +208,9 @@ struct xt_target {
 	unsigned short proto;
 
 	unsigned short family;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /* Furniture shopping... */

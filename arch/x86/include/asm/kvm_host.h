@@ -43,6 +43,7 @@
 #include <asm/virt.h>
 
 #include <hyperv/hvhdk.h>
+#include <linux/ck_kabi.h>
 
 #define __KVM_HAVE_ARCH_VCPU_DEBUGFS
 
@@ -1666,6 +1667,8 @@ struct kvm_arch {
 	 * current VM.
 	 */
 	int cpu_dirty_log_size;
+
+	CK_KABI_RESERVE(1)
 };
 
 struct kvm_vm_stat {

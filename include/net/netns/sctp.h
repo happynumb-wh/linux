@@ -4,6 +4,7 @@
 
 #include <linux/timer.h>
 #include <net/snmp.h>
+#include <linux/ck_kabi.h>
 
 struct sock;
 struct proc_dir_entry;
@@ -179,6 +180,9 @@ struct netns_sctp {
 #ifdef CONFIG_NET_L3_MASTER_DEV
 	int l3mdev_accept;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 #endif /* __NETNS_SCTP_H__ */

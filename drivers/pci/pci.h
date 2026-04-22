@@ -6,6 +6,7 @@
 #include <linux/bitfield.h>
 #include <linux/pci.h>
 #include <trace/events/pci.h>
+#include <linux/ck_kabi.h>
 
 struct pcie_tlp_log;
 
@@ -681,6 +682,15 @@ struct pci_sriov {
 	resource_size_t	barsz[PCI_SRIOV_NUM_BARS];	/* VF BAR size */
 	u16		vf_rebar_cap;	/* VF Resizable BAR capability offset */
 	bool		drivers_autoprobe; /* Auto probing of VFs by driver */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 };
 
 #ifdef CONFIG_PCI_DOE

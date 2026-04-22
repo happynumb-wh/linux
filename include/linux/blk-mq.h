@@ -10,6 +10,7 @@
 #include <linux/srcu.h>
 #include <linux/rw_hint.h>
 #include <linux/rwsem.h>
+#include <linux/ck_kabi.h>
 
 struct blk_mq_tags;
 struct blk_flush_queue;
@@ -460,6 +461,11 @@ struct blk_mq_hw_ctx {
 	 * q->unused_hctx_list.
 	 */
 	struct list_head	hctx_list;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 /**
@@ -554,6 +560,11 @@ struct blk_mq_tag_set {
 	struct srcu_struct	tags_srcu;
 
 	struct rw_semaphore	update_nr_hwq_lock;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 /**
@@ -565,6 +576,8 @@ struct blk_mq_tag_set {
 struct blk_mq_queue_data {
 	struct request *rq;
 	bool last;
+
+	CK_KABI_RESERVE(1)
 };
 
 typedef bool (busy_tag_iter_fn)(struct request *, void *);
@@ -684,6 +697,11 @@ struct blk_mq_ops {
 	 */
 	void (*show_rq)(struct seq_file *m, struct request *rq);
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 /* Keep hctx_flag_name[] in sync with the definitions below */
@@ -789,6 +807,11 @@ struct blk_mq_tags {
 	 */
 	spinlock_t lock;
 	struct rcu_head rcu_head;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 static inline struct request *blk_mq_tag_to_rq(struct blk_mq_tags *tags,

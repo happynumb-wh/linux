@@ -24,6 +24,7 @@
 #include <linux/irq.h>
 
 #include <asm/msi.h>
+#include <linux/ck_kabi.h>
 
 /* Dummy shadow structures if an architecture does not define them */
 #ifndef arch_msi_msg_addr_lo
@@ -203,6 +204,9 @@ struct msi_desc {
 		struct pci_msi_desc	pci;
 		struct msi_desc_data	data;
 	};
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /*

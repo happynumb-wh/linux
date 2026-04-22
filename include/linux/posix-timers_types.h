@@ -5,6 +5,7 @@
 #include <linux/mutex_types.h>
 #include <linux/timerqueue_types.h>
 #include <linux/types.h>
+#include <linux/ck_kabi.h>
 
 /*
  * Bit fields within a clockid:
@@ -69,6 +70,11 @@ struct posix_cputimers_work {
 	struct callback_head	work;
 	struct mutex		mutex;
 	unsigned int		scheduled;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #else /* CONFIG_POSIX_TIMERS */

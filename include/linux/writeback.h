@@ -12,6 +12,7 @@
 #include <linux/backing-dev-defs.h>
 #include <linux/blk_types.h>
 #include <linux/folio_batch.h>
+#include <linux/ck_kabi.h>
 
 struct bio;
 
@@ -88,6 +89,9 @@ struct writeback_control {
 	size_t wb_lcand_bytes;		/* bytes written by last candidate */
 	size_t wb_tcand_bytes;		/* bytes written by this candidate */
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 static inline blk_opf_t wbc_to_write_flags(struct writeback_control *wbc)

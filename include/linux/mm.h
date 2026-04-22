@@ -37,6 +37,7 @@
 #include <linux/bitmap.h>
 #include <linux/bitops.h>
 #include <linux/iommu-debug-pagealloc.h>
+#include <linux/ck_kabi.h>
 
 struct mempolicy;
 struct anon_vma;
@@ -756,6 +757,11 @@ struct vm_fault {
 					 * page table to avoid allocation from
 					 * atomic context.
 					 */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 struct vm_uffd_ops;
@@ -870,6 +876,11 @@ struct vm_operations_struct {
 #ifdef CONFIG_USERFAULTFD
 	const struct vm_uffd_ops *uffd_ops;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #ifdef CONFIG_NUMA_BALANCING

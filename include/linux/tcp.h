@@ -20,6 +20,7 @@
 #include <net/inet_connection_sock.h>
 #include <net/inet_timewait_sock.h>
 #include <uapi/linux/tcp.h>
+#include <linux/ck_kabi.h>
 
 static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
 {
@@ -179,6 +180,9 @@ struct tcp_request_sock {
 	u8				ao_rcv_next;
 	bool				used_tcp_ao;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 #define tcp_rsk(ptr) container_of_const(ptr, struct tcp_request_sock, req.req)
@@ -527,6 +531,11 @@ struct tcp_sock {
 	 */
 	struct request_sock __rcu *fastopen_rsk;
 	struct saved_syn *saved_syn;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 enum tsq_enum {
@@ -584,6 +593,9 @@ struct tcp_timewait_sock {
 #ifdef CONFIG_TCP_AO
 	struct tcp_ao_info	__rcu *ao_info;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 static inline struct tcp_timewait_sock *tcp_twsk(const struct sock *sk)

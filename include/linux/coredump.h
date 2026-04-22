@@ -6,6 +6,7 @@
 #include <linux/mm.h>
 #include <linux/fs.h>
 #include <asm/siginfo.h>
+#include <linux/ck_kabi.h>
 
 #ifdef CONFIG_COREDUMP
 struct core_vma_metadata {
@@ -29,6 +30,8 @@ struct coredump_params {
 	size_t vma_data_size;
 	struct core_vma_metadata *vma_meta;
 	struct pid *pid;
+
+	CK_KABI_RESERVE(1)
 };
 
 extern unsigned int core_file_note_size_limit;

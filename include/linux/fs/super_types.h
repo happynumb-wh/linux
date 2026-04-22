@@ -3,6 +3,7 @@
 #define _LINUX_FS_SUPER_TYPES_H
 
 #include <linux/fs_dirent.h>
+#include <linux/ck_kabi.h>
 #include <linux/errseq.h>
 #include <linux/list_lru.h>
 #include <linux/list.h>
@@ -127,6 +128,11 @@ struct super_operations {
 
 	/* Report a filesystem error */
 	void (*report_error)(const struct fserror_event *event);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 struct super_block {

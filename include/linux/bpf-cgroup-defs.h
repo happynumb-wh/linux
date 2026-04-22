@@ -7,6 +7,7 @@
 #include <linux/list.h>
 #include <linux/percpu-refcount.h>
 #include <linux/workqueue.h>
+#include <linux/ck_kabi.h>
 
 struct bpf_prog_array;
 
@@ -76,6 +77,9 @@ struct cgroup_bpf {
 
 	/* cgroup_bpf is released using a work queue */
 	struct work_struct release_work;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 #else /* CONFIG_CGROUP_BPF */

@@ -5,6 +5,7 @@
 #include <linux/topology.h>
 
 #include <linux/sched/idle.h>
+#include <linux/ck_kabi.h>
 
 /*
  * sched-domains (multiprocessor balancing) declarations:
@@ -68,6 +69,11 @@ struct sched_domain_shared {
 	atomic_t	nr_busy_cpus;
 	int		has_idle_cores;
 	int		nr_idle_scan;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 struct sched_domain {
@@ -146,6 +152,11 @@ struct sched_domain {
 	 *
 	unsigned long span[];
 	 */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 static inline struct cpumask *sched_domain_span(struct sched_domain *sd)

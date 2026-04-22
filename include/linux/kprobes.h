@@ -40,6 +40,7 @@
 
 #else /* !CONFIG_KPROBES */
 #include <asm-generic/kprobes.h>
+#include <linux/ck_kabi.h>
 typedef int kprobe_opcode_t;
 struct arch_specific_insn {
 	int dummy;
@@ -91,6 +92,8 @@ struct kprobe {
 	 * Protected by kprobe_mutex after this kprobe is registered.
 	 */
 	u32 flags;
+
+	CK_KABI_RESERVE(1)
 };
 
 /* Kprobe status flags */

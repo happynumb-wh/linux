@@ -3,6 +3,7 @@
 #define _LINUX_BIO_INTEGRITY_H
 
 #include <linux/bio.h>
+#include <linux/ck_kabi.h>
 
 enum bip_flags {
 	BIP_BLOCK_INTEGRITY	= 1 << 0, /* block layer owns integrity data */
@@ -26,6 +27,9 @@ struct bio_integrity_payload {
 	u16			app_tag;	/* application tag value */
 
 	struct bio_vec		*bip_vec;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 #define BIP_CLONE_FLAGS (BIP_MAPPED_INTEGRITY | BIP_IP_CHECKSUM | \

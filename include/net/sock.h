@@ -69,6 +69,7 @@
 #include <linux/net_tstamp.h>
 #include <net/l3mdev.h>
 #include <uapi/linux/socket.h>
+#include <linux/ck_kabi.h>
 
 /*
  * This structure really needs to be cleaned up.
@@ -602,6 +603,15 @@ struct sock {
 #if IS_ENABLED(CONFIG_PROVE_LOCKING) && IS_ENABLED(CONFIG_MODULES)
 	struct module		*sk_owner;
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 };
 
 struct sock_bh_locked {
@@ -1402,6 +1412,15 @@ struct proto {
 
 	struct list_head	node;
 	int			(*diag_destroy)(struct sock *sk, int err);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 } __randomize_layout;
 
 int proto_register(struct proto *prot, int alloc_slab);
@@ -1478,6 +1497,8 @@ proto_sockets_allocated_sum_positive(struct proto *prot)
 struct prot_inuse {
 	int all;
 	int val[PROTO_INUSE_NR];
+
+	CK_KABI_RESERVE(1)
 };
 
 static inline void sock_prot_inuse_add(const struct net *net,

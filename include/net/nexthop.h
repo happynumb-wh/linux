@@ -16,6 +16,7 @@
 #include <net/ip_fib.h>
 #include <net/ip6_fib.h>
 #include <net/netlink.h>
+#include <linux/ck_kabi.h>
 
 #define NEXTHOP_VALID_USER_FLAGS RTNH_F_ONLINK
 
@@ -123,6 +124,10 @@ struct nh_grp_entry {
 	struct list_head nh_list;
 	struct nexthop	*nh_parent;  /* nexthop of group with this entry */
 	u64		packets_hw;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
 };
 
 struct nh_group {
@@ -136,6 +141,8 @@ struct nh_group {
 	bool			hw_stats;
 
 	struct nh_res_table __rcu *res_table;
+	CK_KABI_RESERVE(1)
+
 	struct nh_grp_entry	nh_entries[] __counted_by(num_nh);
 };
 

@@ -19,6 +19,7 @@
 #include <linux/pm.h>
 #include <linux/device/bus.h>
 #include <linux/module.h>
+#include <linux/ck_kabi.h>
 
 /**
  * enum probe_type - device driver probe type to try
@@ -128,6 +129,11 @@ struct device_driver {
 		 */
 		void (*post_unbind_rust)(struct device *dev);
 	} p_cb;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 

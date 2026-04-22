@@ -23,6 +23,7 @@
 
 #ifdef __KERNEL__
 #include <linux/uidgid.h>
+#include <linux/ck_kabi.h>
 
 /* key handle serial number */
 typedef int32_t key_serial_t;
@@ -279,6 +280,8 @@ struct key {
 	 * restriction.
 	 */
 	struct key_restriction *restrict_link;
+
+	CK_KABI_RESERVE(1)
 };
 
 extern struct key *key_alloc(struct key_type *type,

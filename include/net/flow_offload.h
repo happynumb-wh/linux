@@ -5,6 +5,7 @@
 #include <linux/list.h>
 #include <linux/netlink.h>
 #include <net/flow_dissector.h>
+#include <linux/ck_kabi.h>
 
 struct flow_match {
 	struct flow_dissector	*dissector;
@@ -331,6 +332,11 @@ struct flow_action_entry {
 		} pppoe;
 	};
 	struct flow_action_cookie *user_cookie; /* user defined action cookie */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 struct flow_action {

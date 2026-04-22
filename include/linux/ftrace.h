@@ -21,6 +21,7 @@
 #include <linux/fs.h>
 
 #include <asm/ftrace.h>
+#include <linux/ck_kabi.h>
 
 /*
  * If the arch supports passing the variable contents of
@@ -464,6 +465,8 @@ struct ftrace_ops {
 	unsigned long			direct_call;
 #endif
 #endif
+
+	CK_KABI_RESERVE(1)
 };
 
 extern struct ftrace_ops __rcu *ftrace_ops_list;

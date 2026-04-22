@@ -17,6 +17,7 @@
 #include <rdma/ib_verbs.h>
 
 #include "netlink_gen.h"
+#include <linux/ck_kabi.h>
 
 struct devlink_rel;
 
@@ -62,6 +63,10 @@ struct devlink {
 	struct rcu_work rwork;
 	struct devlink_rel *rel;
 	struct xarray nested_rels;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+
 	char priv[] __aligned(NETDEV_ALIGN);
 };
 

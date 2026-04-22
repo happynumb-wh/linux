@@ -79,6 +79,7 @@
 #include <trace/events/sched.h>
 
 #include "../workqueue_internal.h"
+#include <linux/ck_kabi.h>
 
 struct rq;
 struct cfs_rq;
@@ -320,6 +321,11 @@ struct rt_bandwidth {
 	u64			rt_runtime;
 	struct hrtimer		rt_period_timer;
 	unsigned int		rt_period_active;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 static inline int dl_bandwidth_enabled(void)
@@ -349,6 +355,11 @@ struct dl_bw {
 	raw_spinlock_t		lock;
 	u64			bw;
 	u64			total_bw;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 extern void init_dl_bw(struct dl_bw *dl_b);
@@ -468,6 +479,11 @@ struct cfs_bandwidth {
 	u64			throttled_time;
 	u64			burst_time;
 #endif /* CONFIG_CFS_BANDWIDTH */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 /* Task group related information */
@@ -524,6 +540,14 @@ struct task_group {
 	struct uclamp_se	uclamp[UCLAMP_CNT];
 #endif
 
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 };
 
 #ifdef CONFIG_GROUP_SCHED_WEIGHT
@@ -770,6 +794,15 @@ struct cfs_rq {
 	struct list_head        throttled_limbo_list;
 # endif /* CONFIG_CFS_BANDWIDTH */
 #endif /* CONFIG_FAIR_GROUP_SCHED */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 };
 
 #ifdef CONFIG_SCHED_CLASS_EXT
@@ -862,6 +895,11 @@ struct rt_rq {
 #ifdef CONFIG_CGROUP_SCHED
 	struct task_group	*tg; /* this tg has "this" rt_rq on given CPU for runnable entities */
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 static inline bool rt_rq_is_runnable(struct rt_rq *rt_rq)
@@ -926,6 +964,11 @@ struct dl_rq {
 	 * by the GRUB algorithm.
 	 */
 	u64			bw_ratio;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -1054,6 +1097,11 @@ struct root_domain {
 	 * CPUs of the rd. Protected by RCU.
 	 */
 	struct perf_domain __rcu *pd;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 extern void init_defrootdomain(void);
@@ -1353,6 +1401,15 @@ struct rq {
 #endif
 
 	atomic_t		nr_iowait;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+	CK_KABI_RESERVE(5)
+	CK_KABI_RESERVE(6)
+	CK_KABI_RESERVE(7)
+	CK_KABI_RESERVE(8)
 } __no_randomize_layout;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -2197,6 +2254,11 @@ struct sched_group_capacity {
 
 	int			id;
 
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+
 	unsigned long		cpumask[];		/* Balance mask */
 };
 
@@ -2217,6 +2279,12 @@ struct sched_group {
 	 * by attaching extra space to the end of the structure,
 	 * depending on how many CPUs the kernel has booted up with)
 	 */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+
 	unsigned long		cpumask[];
 };
 
@@ -2677,6 +2745,11 @@ struct sched_class {
 	 */
 	int (*task_is_throttled)(struct task_struct *p, int cpu);
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 static inline void put_prev_task(struct rq *rq, struct task_struct *prev)

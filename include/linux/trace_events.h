@@ -9,6 +9,7 @@
 #include <linux/hardirq.h>
 #include <linux/perf_event.h>
 #include <linux/tracepoint.h>
+#include <linux/ck_kabi.h>
 
 struct trace_array;
 struct array_buffer;
@@ -135,6 +136,9 @@ struct trace_iterator {
 	long			idx;
 
 	/* All new field here will be zeroed out in pipe_read */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 enum trace_iter_flags {

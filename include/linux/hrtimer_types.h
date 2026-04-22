@@ -4,6 +4,7 @@
 
 #include <linux/types.h>
 #include <linux/timerqueue_types.h>
+#include <linux/ck_kabi.h>
 
 struct hrtimer_clock_base;
 
@@ -48,6 +49,10 @@ struct hrtimer {
 	bool				is_lazy;
 	ktime_t				_softexpires;
 	enum hrtimer_restart		(*__private function)(struct hrtimer *);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
 };
 
 #endif /* _LINUX_HRTIMER_TYPES_H */

@@ -31,6 +31,7 @@
 #include <drm/drm_rect.h>
 #include <drm/drm_modeset_lock.h>
 #include <drm/drm_util.h>
+#include <linux/ck_kabi.h>
 
 struct drm_crtc;
 struct drm_plane_size_hint;
@@ -819,6 +820,8 @@ struct drm_plane {
 	 * @kmsg_panic: Used to register a panic notifier for this plane
 	 */
 	struct kmsg_dumper kmsg_panic;
+
+	CK_KABI_RESERVE(1)
 };
 
 #define obj_to_plane(x) container_of(x, struct drm_plane, base)

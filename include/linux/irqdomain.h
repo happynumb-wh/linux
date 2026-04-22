@@ -14,6 +14,7 @@
 #include <linux/of.h>
 #include <linux/mutex.h>
 #include <linux/radix-tree.h>
+#include <linux/ck_kabi.h>
 
 struct device_node;
 struct fwnode_handle;
@@ -193,6 +194,11 @@ struct irq_domain {
 	irq_hw_number_t			hwirq_max;
 	unsigned int			revmap_size;
 	struct radix_tree_root		revmap_tree;
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
+
 	struct irq_data __rcu		*revmap[] __counted_by(revmap_size);
 };
 

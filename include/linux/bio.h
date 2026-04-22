@@ -9,6 +9,7 @@
 /* struct bio, bio_vec and BIO_* flags are defined in blk_types.h */
 #include <linux/blk_types.h>
 #include <linux/uio.h>
+#include <linux/ck_kabi.h>
 
 #define BIO_MAX_VECS		256U
 #define BIO_MAX_INLINE_VECS	UIO_MAXIOV
@@ -695,6 +696,11 @@ struct bio_set {
 	 * Hot un-plug notifier for the per-cpu cache, if used
 	 */
 	struct hlist_node cpuhp_dead;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 static inline bool bioset_initialized(struct bio_set *bs)

@@ -10,6 +10,7 @@
 
 #include <linux/key.h>
 #include <linux/errno.h>
+#include <linux/ck_kabi.h>
 
 #ifdef CONFIG_KEYS
 
@@ -36,6 +37,8 @@ struct key_preparsed_payload {
 	size_t		datalen;	/* Raw datalen */
 	size_t		quotalen;	/* Quota length for proposed payload */
 	time64_t	expiry;		/* Expiry time of key */
+
+	CK_KABI_RESERVE(1)
 } __randomize_layout;
 
 typedef int (*request_key_actor_t)(struct key *auth_key, void *aux);
@@ -56,6 +59,8 @@ struct key_match_data {
 	unsigned	lookup_type;	/* Type of lookup for this search. */
 #define KEYRING_SEARCH_LOOKUP_DIRECT	0x0000	/* Direct lookup by description. */
 #define KEYRING_SEARCH_LOOKUP_ITERATE	0x0001	/* Iterative search. */
+
+	CK_KABI_RESERVE(1)
 };
 
 /*

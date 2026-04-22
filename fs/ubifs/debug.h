@@ -10,6 +10,7 @@
 
 #ifndef __UBIFS_DEBUG_H__
 #define __UBIFS_DEBUG_H__
+#include <linux/ck_kabi.h>
 
 /* Checking helper functions */
 typedef int (*dbg_leaf_callback)(struct ubifs_info *c,
@@ -116,6 +117,9 @@ struct ubifs_debug_info {
 	struct dentry *dfs_chk_fs;
 	struct dentry *dfs_tst_rcvry;
 	struct dentry *dfs_ro_error;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /**

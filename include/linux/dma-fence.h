@@ -22,6 +22,7 @@
 #include <linux/printk.h>
 #include <linux/rcupdate.h>
 #include <linux/timekeeping.h>
+#include <linux/ck_kabi.h>
 
 struct dma_fence;
 struct dma_fence_ops;
@@ -270,6 +271,8 @@ struct dma_fence_ops {
 	 * This callback is optional.
 	 */
 	void (*set_deadline)(struct dma_fence *fence, ktime_t deadline);
+
+	CK_KABI_RESERVE(1)
 };
 
 void dma_fence_init(struct dma_fence *fence, const struct dma_fence_ops *ops,

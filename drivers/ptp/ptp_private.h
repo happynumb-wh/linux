@@ -18,6 +18,7 @@
 #include <linux/list.h>
 #include <linux/bitmap.h>
 #include <linux/debugfs.h>
+#include <linux/ck_kabi.h>
 
 #define PTP_MAX_TIMESTAMPS 128
 #define PTP_BUF_TIMESTAMPS 30
@@ -68,6 +69,11 @@ struct ptp_clock {
 	bool is_virtual_clock;
 	bool has_cycles;
 	struct dentry *debugfs_root;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #define info_to_vclock(d) container_of((d), struct ptp_vclock, info)

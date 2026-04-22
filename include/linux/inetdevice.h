@@ -13,11 +13,14 @@
 #include <linux/sysctl.h>
 #include <linux/rtnetlink.h>
 #include <linux/refcount.h>
+#include <linux/ck_kabi.h>
 
 struct ipv4_devconf {
 	void	*sysctl;
 	int	data[IPV4_DEVCONF_MAX];
 	DECLARE_BITMAP(state, IPV4_DEVCONF_MAX);
+
+	CK_KABI_RESERVE(1)
 };
 
 #define MC_HASH_SZ_LOG 9
@@ -50,6 +53,9 @@ struct in_device {
 	struct neigh_parms	*arp_parms;
 	struct ipv4_devconf	cnf;
 	struct rcu_head		rcu_head;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 #define IPV4_DEVCONF(cnf, attr) ((cnf).data[IPV4_DEVCONF_ ## attr - 1])

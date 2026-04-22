@@ -44,6 +44,7 @@
 
 #include <asm/kvm_host.h>
 #include <linux/kvm_dirty_ring.h>
+#include <linux/ck_kabi.h>
 
 #ifndef KVM_MAX_VCPU_IDS
 #define KVM_MAX_VCPU_IDS KVM_MAX_VCPUS
@@ -398,6 +399,8 @@ struct kvm_vcpu {
 	 */
 	struct kvm_memory_slot *last_used_slot;
 	u64 last_used_slot_gen;
+
+	CK_KABI_RESERVE(1)
 };
 
 /*
@@ -614,6 +617,8 @@ struct kvm_memory_slot {
 		pgoff_t pgoff;
 	} gmem;
 #endif
+
+	CK_KABI_RESERVE(1)
 };
 
 static inline bool kvm_slot_has_gmem(const struct kvm_memory_slot *slot)
@@ -876,6 +881,8 @@ struct kvm {
 	struct xarray mem_attr_array;
 #endif
 	char stats_id[KVM_STATS_NAME_SIZE];
+
+	CK_KABI_RESERVE(1)
 };
 
 #define kvm_err(fmt, ...) \

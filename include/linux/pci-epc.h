@@ -10,6 +10,7 @@
 #define __LINUX_PCI_EPC_H
 
 #include <linux/pci-epf.h>
+#include <linux/ck_kabi.h>
 
 struct pci_epc;
 
@@ -116,6 +117,8 @@ struct pci_epc_ops {
 	const struct pci_epc_features* (*get_features)(struct pci_epc *epc,
 						       u8 func_no, u8 vfunc_no);
 	struct module *owner;
+
+	CK_KABI_RESERVE(1)
 };
 
 /**
@@ -182,6 +185,8 @@ struct pci_epc {
 	unsigned long			function_num_map;
 	int				domain_nr;
 	bool				init_complete;
+
+	CK_KABI_RESERVE(1)
 };
 
 /**

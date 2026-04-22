@@ -5,6 +5,7 @@
 #include <linux/ktime.h>
 #include <linux/timerqueue.h>
 #include <linux/seqlock.h>
+#include <linux/ck_kabi.h>
 
 #ifdef CONFIG_64BIT
 # define __hrtimer_clock_base_align	____cacheline_aligned
@@ -33,6 +34,9 @@ struct hrtimer_clock_base {
 	struct hrtimer			*running;
 	struct timerqueue_linked_head	active;
 	ktime_t				offset;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 } __hrtimer_clock_base_align;
 
 enum hrtimer_base_type {
@@ -107,6 +111,9 @@ struct hrtimer_cpu_base {
 	ktime_t				deferred_expires_next;
 	struct hrtimer_clock_base	clock_base[HRTIMER_MAX_CLOCK_BASES];
 	call_single_data_t		csd;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 } ____cacheline_aligned;
 
 

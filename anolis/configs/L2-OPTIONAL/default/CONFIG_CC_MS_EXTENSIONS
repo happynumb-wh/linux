@@ -1,0 +1,1 @@
+CONFIG_CC_MS_EXTENSIONS="-fms-anonymous-structs"

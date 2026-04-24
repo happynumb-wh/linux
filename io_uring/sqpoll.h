@@ -19,6 +19,8 @@ struct io_sq_data {
 	u64			work_time;
 	unsigned long		state;
 	struct completion	exited;
+
+	bool                    idle_mode_us;
 };
 
 int io_sq_offload_create(struct io_ring_ctx *ctx, struct io_uring_params *p);

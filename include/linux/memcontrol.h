@@ -996,6 +996,11 @@ struct mem_cgroup *mem_cgroup_get_oom_group(struct task_struct *victim,
 					    struct mem_cgroup *oom_domain);
 void mem_cgroup_print_oom_group(struct mem_cgroup *memcg);
 
+int memory_oom_group_show(struct seq_file *m, void *v);
+
+ssize_t memory_oom_group_write(struct kernfs_open_file *of,
+			       char *buf, size_t nbytes, loff_t off);
+
 /* idx can be of type enum memcg_stat_item or node_stat_item */
 void mod_memcg_state(struct mem_cgroup *memcg,
 		     enum memcg_stat_item idx, int val);

@@ -2318,6 +2318,12 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.write_u64 = mem_cgroup_priority_write,
 		.flags = CFTYPE_NOT_ON_ROOT,
 	},
+	{
+		.name = "oom.group",
+		.flags = CFTYPE_NOT_ON_ROOT | CFTYPE_NS_DELEGATABLE,
+		.seq_show = memory_oom_group_show,
+		.write = memory_oom_group_write,
+	},
 	{ },	/* terminate */
 };
 

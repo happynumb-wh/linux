@@ -2156,9 +2156,6 @@ struct mem_cgroup *mem_cgroup_get_oom_group(struct task_struct *victim,
 	struct mem_cgroup *oom_group = NULL;
 	struct mem_cgroup *memcg;
 
-	if (!cgroup_subsys_on_dfl(memory_cgrp_subsys))
-		return NULL;
-
 	if (!oom_domain)
 		oom_domain = root_mem_cgroup;
 
@@ -5071,7 +5068,7 @@ static int memory_numa_stat_show(struct seq_file *m, void *v)
 }
 #endif
 
-static int memory_oom_group_show(struct seq_file *m, void *v)
+int memory_oom_group_show(struct seq_file *m, void *v)
 {
 	struct mem_cgroup *memcg = mem_cgroup_from_seq(m);
 
@@ -5080,8 +5077,8 @@ static int memory_oom_group_show(struct seq_file *m, void *v)
 	return 0;
 }
 
-static ssize_t memory_oom_group_write(struct kernfs_open_file *of,
-				      char *buf, size_t nbytes, loff_t off)
+ssize_t memory_oom_group_write(struct kernfs_open_file *of,
+			       char *buf, size_t nbytes, loff_t off)
 {
 	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
 	int ret, oom_group;

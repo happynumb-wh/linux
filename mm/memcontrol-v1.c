@@ -2079,6 +2079,44 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.name = "stat",
 		.seq_show = memory_stat_show,
 	},
+#ifdef CONFIG_MEMSLI
+	{
+		.name = "direct_reclaim_global_latency",
+		.private = MEM_LAT_GLOBAL_DIRECT_RECLAIM,
+		.write_u64 = memcg_lat_stat_write,
+		.seq_show =  memcg_lat_stat_show,
+	},
+	{
+		.name = "direct_reclaim_memcg_latency",
+		.private = MEM_LAT_MEMCG_DIRECT_RECLAIM,
+		.write_u64 = memcg_lat_stat_write,
+		.seq_show =  memcg_lat_stat_show,
+	},
+	{
+		.name = "direct_compact_latency",
+		.private = MEM_LAT_DIRECT_COMPACT,
+		.write_u64 = memcg_lat_stat_write,
+		.seq_show =  memcg_lat_stat_show,
+	},
+	{
+		.name = "direct_swapout_global_latency",
+		.private = MEM_LAT_GLOBAL_DIRECT_SWAPOUT,
+		.write_u64 = memcg_lat_stat_write,
+		.seq_show =  memcg_lat_stat_show,
+	},
+	{
+		.name = "direct_swapout_memcg_latency",
+		.private = MEM_LAT_MEMCG_DIRECT_SWAPOUT,
+		.write_u64 = memcg_lat_stat_write,
+		.seq_show =  memcg_lat_stat_show,
+	},
+	{
+		.name = "direct_swapin_latency",
+		.private = MEM_LAT_DIRECT_SWAPIN,
+		.write_u64 = memcg_lat_stat_write,
+		.seq_show =  memcg_lat_stat_show,
+	},
+#endif /* CONFIG_MEMSLI */
 	{
 		.name = "force_empty",
 		.write = mem_cgroup_force_empty_write,

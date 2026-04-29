@@ -1302,6 +1302,15 @@ config DMAPOOL_TEST
 config ARCH_HAS_PTE_SPECIAL
 	bool
 
+config MEMSLI
+	bool "Support memory latency histogram, a.k.a, memsli"
+	depends on MEMCG
+	default y
+	help
+	  This probes and calculates various kinds of memory latency, and then
+	  groups into the corresponding latency histogram in every memory
+	  cgroup, respectively.
+
 config MAPPING_DIRTY_HELPERS
         bool
 

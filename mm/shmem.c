@@ -2301,6 +2301,7 @@ static int shmem_swapin_folio(struct inode *inode, pgoff_t index,
 	struct folio *folio = NULL;
 	int error, nr_pages, order;
 	pgoff_t offset;
+	u64 start;
 
 	VM_BUG_ON(!*foliop || !xa_is_value(*foliop));
 	index_entry = radix_to_swp_entry(*foliop);
@@ -2332,10 +2333,12 @@ static int shmem_swapin_folio(struct inode *inode, pgoff_t index,
 	/* Look it up and read it in.. */
 	folio = swap_cache_get_folio(swap);
 	if (!folio) {
+		memcg_lat_stat_start(&start);
 		if (data_race(si->flags & SWP_SYNCHRONOUS_IO)) {
 			/* Direct swapin skipping swap cache & readahead */
 			folio = shmem_swap_alloc_folio(inode, vma, index,
 						       index_entry, order, gfp);
+			memcg_lat_stat_end(MEM_LAT_DIRECT_SWAPIN, start);
 			if (IS_ERR(folio)) {
 				error = PTR_ERR(folio);
 				folio = NULL;
@@ -2344,6 +2347,7 @@ static int shmem_swapin_folio(struct inode *inode, pgoff_t index,
 		} else {
 			/* Cached swapin only supports order 0 folio */
 			folio = shmem_swapin_cluster(swap, gfp, info, index);
+			memcg_lat_stat_end(MEM_LAT_DIRECT_SWAPIN, start);
 			if (!folio) {
 				error = -ENOMEM;
 				goto failed;

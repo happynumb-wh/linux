@@ -1063,6 +1063,7 @@ static unsigned int shrink_folio_list(struct list_head *folio_list,
 	LIST_HEAD(demote_folios);
 	unsigned int nr_reclaimed = 0, nr_demoted = 0;
 	unsigned int pgactivate = 0;
+	u64 start = 0;
 	bool do_demote_pass;
 	struct swap_iocb *plug = NULL;
 
@@ -1395,6 +1396,8 @@ retry:
 			 * starts and then write it out here.
 			 */
 			try_to_unmap_flush_dirty();
+			if (!current_is_kswapd())
+				memcg_lat_stat_start(&start);
 			switch (pageout(folio, mapping, &plug, folio_list)) {
 			case PAGE_KEEP:
 				goto keep_locked;
@@ -1410,6 +1413,11 @@ retry:
 				}
 				goto activate_locked;
 			case PAGE_SUCCESS:
+				if (!current_is_kswapd())
+					memcg_lat_stat_end(cgroup_reclaim(sc) ?
+						MEM_LAT_MEMCG_DIRECT_SWAPOUT :
+						MEM_LAT_GLOBAL_DIRECT_SWAPOUT,
+						start);
 				if (nr_pages > 1 && !folio_test_large(folio)) {
 					sc->nr_scanned -= (nr_pages - 1);
 					nr_pages = 1;

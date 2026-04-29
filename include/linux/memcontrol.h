@@ -62,6 +62,33 @@ struct mem_cgroup_reclaim_cookie {
 	int generation;
 };
 
+enum mem_lat_stat_item {
+	MEM_LAT_GLOBAL_DIRECT_RECLAIM,	/* global direct reclaim latency */
+	MEM_LAT_MEMCG_DIRECT_RECLAIM,	/* memcg direct reclaim latency */
+	MEM_LAT_DIRECT_COMPACT,		/* direct compact latency */
+	MEM_LAT_GLOBAL_DIRECT_SWAPOUT,	/* global direct swapout latency */
+	MEM_LAT_MEMCG_DIRECT_SWAPOUT,	/* memcg direct swapout latency */
+	MEM_LAT_DIRECT_SWAPIN,		/* direct swapin latency */
+	MEM_LAT_NR_STAT,
+};
+
+/* Memory latency histogram distribution, in milliseconds */
+enum mem_lat_count_t {
+	MEM_LAT_0_1,
+	MEM_LAT_1_5,
+	MEM_LAT_5_10,
+	MEM_LAT_10_100,
+	MEM_LAT_100_500,
+	MEM_LAT_500_1000,
+	MEM_LAT_1000_INF,
+	MEM_LAT_TOTAL,
+	MEM_LAT_NR_COUNT,
+};
+
+struct mem_cgroup_lat_stat_cpu {
+	unsigned long item[MEM_LAT_NR_STAT][MEM_LAT_NR_COUNT];
+};
+
 #ifdef CONFIG_MEMCG
 
 #define MEM_CGROUP_ID_SHIFT	16
@@ -330,6 +357,10 @@ struct mem_cgroup {
 	struct list_head event_list;
 	spinlock_t event_list_lock;
 #endif /* CONFIG_MEMCG_V1 */
+
+#ifdef CONFIG_MEMSLI
+	struct mem_cgroup_lat_stat_cpu __percpu *lat_stat_cpu;
+#endif
 
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)
@@ -1955,5 +1986,29 @@ static inline void memcg1_swapin(swp_entry_t entry, unsigned int nr_pages)
 }
 
 #endif /* CONFIG_MEMCG_V1 */
+
+#ifdef CONFIG_MEMSLI
+extern void memcg_lat_stat_start(u64 *start);
+extern void memcg_lat_stat_end(enum mem_lat_stat_item sidx, u64 start);
+extern int memcg_lat_stat_show(struct seq_file *m, void *v);
+extern int memcg_lat_stat_write(struct cgroup_subsys_state *css,
+				struct cftype *cft, u64 val);
+#else
+static inline void memcg_lat_stat_start(u64 *start)
+{
+}
+static inline void memcg_lat_stat_end(enum mem_lat_stat_item sidx, u64 start)
+{
+}
+static inline int memcg_lat_stat_show(struct seq_file *m, void *v)
+{
+	return 0;
+}
+static inline int memcg_lat_stat_write(struct cgroup_subsys_state *css,
+				       struct cftype *cft, u64 val)
+{
+	return 0;
+}
+#endif /* CONFIG_MEMSLI */
 
 #endif /* _LINUX_MEMCONTROL_H */

@@ -464,12 +464,14 @@ static inline int ra_alloc_folio(struct readahead_control *ractl, pgoff_t index,
 	return 0;
 }
 
-static int select_new_order(int old_order, int max_order, unsigned long orders)
+static int select_new_order(unsigned int old_order, unsigned int max_order,
+			    unsigned long orders)
 {
-	orders &= BIT(max_order + 1) - 1;
+	unsigned int min_order = min_t(unsigned int, old_order, max_order);
+
+	orders &= BIT(min_order + 1) - 1;
 	VM_WARN_ON(!orders);
 
-	orders &= (BIT(old_order + 1) - 1);
 	return highest_order(orders);
 }
 

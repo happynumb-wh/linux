@@ -4010,6 +4010,11 @@ static struct mem_cgroup *mem_cgroup_alloc(struct mem_cgroup *parent)
 					       GFP_KERNEL_ACCOUNT);
 	if (!memcg->lat_stat_cpu)
 		goto fail;
+#ifdef CONFIG_MEMCG_V1
+	for (i = 0; i < MEM_LAT_NR_STAT; i++)
+		INIT_LIST_HEAD(&memcg->lat_stat_notify[i]);
+	mutex_init(&memcg->lat_stat_notify_lock);
+#endif
 #endif
 
 	if (!memcg1_alloc_events(memcg))
@@ -5922,6 +5927,7 @@ void memcg_lat_stat_end(enum mem_lat_stat_item sidx, u64 start)
 		this_cpu_inc(iter->lat_stat_cpu->item[sidx][cidx]);
 		this_cpu_add(iter->lat_stat_cpu->item[sidx][MEM_LAT_TOTAL],
 			       duration);
+		memcg_lat_stat_notify_event(iter, sidx);
 	}
 	css_put(&memcg->css);
 }

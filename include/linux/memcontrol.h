@@ -360,6 +360,10 @@ struct mem_cgroup {
 
 #ifdef CONFIG_MEMSLI
 	struct mem_cgroup_lat_stat_cpu __percpu *lat_stat_cpu;
+#ifdef CONFIG_MEMCG_V1
+	struct list_head lat_stat_notify[MEM_LAT_NR_STAT];
+	struct mutex lat_stat_notify_lock;
+#endif
 #endif
 
 	CK_KABI_RESERVE(1)
@@ -1993,6 +1997,15 @@ extern void memcg_lat_stat_end(enum mem_lat_stat_item sidx, u64 start);
 extern int memcg_lat_stat_show(struct seq_file *m, void *v);
 extern int memcg_lat_stat_write(struct cgroup_subsys_state *css,
 				struct cftype *cft, u64 val);
+#ifdef CONFIG_MEMCG_V1
+extern void memcg_lat_stat_notify_event(struct mem_cgroup *memcg,
+					enum mem_lat_stat_item sidx);
+#else
+static inline void memcg_lat_stat_notify_event(struct mem_cgroup *memcg,
+					       enum mem_lat_stat_item sidx)
+{
+}
+#endif
 #else
 static inline void memcg_lat_stat_start(u64 *start)
 {

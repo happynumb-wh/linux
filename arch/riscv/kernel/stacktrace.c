@@ -182,6 +182,13 @@ noinline noinstr void arch_stack_walk(stack_trace_consume_fn consume_entry, void
 	walk_stackframe(task, regs, consume_entry, cookie);
 }
 
+noinline noinstr int arch_stack_walk_reliable(stack_trace_consume_fn consume_entry,
+					      void *cookie,
+					      struct task_struct *task)
+{
+	return -EINVAL;
+}
+
 /*
  * Get the return address for a single stackframe and return a pointer to the
  * next frame tail.

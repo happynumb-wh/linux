@@ -11,6 +11,7 @@
 #include <linux/sched/task_stack.h>
 #include <linux/stacktrace.h>
 #include <linux/ftrace.h>
+#include <linux/kprobes.h>
 
 #include <asm/stacktrace.h>
 
@@ -186,7 +187,73 @@ noinline noinstr int arch_stack_walk_reliable(stack_trace_consume_fn consume_ent
 					      void *cookie,
 					      struct task_struct *task)
 {
-	return -EINVAL;
+	unsigned long fp, sp, pc;
+	int graph_idx = 0;
+	int level = 0;
+#ifdef CONFIG_KRETPROBES
+	struct llist_node *kr_cur = NULL;
+#endif
+
+	if (!task)
+		task = current;
+
+	if (task == current) {
+		fp = (unsigned long)__builtin_frame_address(0);
+		sp = current_stack_pointer;
+		pc = (unsigned long)arch_stack_walk_reliable;
+		level = -1;
+	} else {
+		/* The caller guarantees that a non-current task is inactive. */
+		fp = task->thread.s[0];
+		sp = task->thread.sp;
+		pc = task->thread.ra;
+	}
+
+	for (;;) {
+		struct stackframe *frame;
+		unsigned long frame_ra;
+
+		if (unlikely(!__kernel_text_address(pc)))
+			return -EINVAL;
+
+		if (level++ >= 0 && !consume_entry(cookie, pc))
+			return -EINVAL;
+
+		if (unlikely(!fp_is_valid(fp, sp)))
+			break;
+
+		frame = (struct stackframe *)fp - 1;
+		sp = fp;
+
+		fp = READ_ONCE_TASK_STACK(task, frame->fp);
+		frame_ra = READ_ONCE_TASK_STACK(task, frame->ra);
+		pc = ftrace_graph_ret_addr(task, &graph_idx, frame_ra,
+					   &frame->ra);
+		if (pc == (unsigned long)return_to_handler)
+			return -EINVAL;
+
+		/*
+		 * At an exception boundary we can trust the saved exception PC,
+		 * but not whether the interrupted RA had already been saved in
+		 * a regular frame. Stop here like arm64's reliable unwinder.
+		 */
+		if (pc >= (unsigned long)handle_exception &&
+		    pc < (unsigned long)&ret_from_exception_end)
+			return -EINVAL;
+
+#ifdef CONFIG_KRETPROBES
+		if (is_kretprobe_trampoline(pc)) {
+			pc = kretprobe_find_ret_addr(task, (void *)fp, &kr_cur);
+			if (!pc)
+				return -EINVAL;
+		}
+#endif
+
+		if (is_kretprobe_trampoline(pc))
+			return -EINVAL;
+	}
+
+	return 0;
 }
 
 /*

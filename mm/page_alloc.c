@@ -54,6 +54,7 @@
 #include <linux/delayacct.h>
 #include <linux/cacheinfo.h>
 #include <linux/pgalloc_tag.h>
+#include <linux/pre_oom.h>
 #include <asm/div64.h>
 #include "internal.h"
 #include "shuffle.h"
@@ -4398,6 +4399,7 @@ __perform_reclaim(gfp_t gfp_mask, unsigned int order,
 	cond_resched();
 
 	/* We now go into synchronous reclaim */
+	pre_oom_enter();
 	cpuset_memory_pressure_bump();
 	memcg_lat_stat_start(&start);
 	fs_reclaim_acquire(gfp_mask);
@@ -4409,6 +4411,7 @@ __perform_reclaim(gfp_t gfp_mask, unsigned int order,
 	memalloc_noreclaim_restore(noreclaim_flag);
 	fs_reclaim_release(gfp_mask);
 	memcg_lat_stat_end(MEM_LAT_GLOBAL_DIRECT_RECLAIM, start);
+	pre_oom_leave();
 
 	cond_resched();
 
@@ -4709,6 +4712,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	int reserve_flags;
 	bool compact_first = false;
 	bool can_retry_reserves = true;
+	bool can_pre_oom = false;
 
 	if (unlikely(nofail)) {
 		/*
@@ -4723,6 +4727,28 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 		 */
 		WARN_ON_ONCE(current->flags & PF_MEMALLOC);
 	}
+
+#ifdef CONFIG_PRE_OOM
+	/*
+	 * If Pre-OOM is enabled, the cgroup of QoS sensitive should avoid
+	 * direct reclaim and trigger OOM as soon as possible. Thus gfp_mask
+	 * should be reset here.
+	 */
+	if (pre_oom_enabled()) {
+		struct mem_cgroup *memcg;
+
+		memcg = get_mem_cgroup_from_mm(current->mm);
+		if (memcg) {
+			if (memcg->pre_oom)
+				gfp_mask &= ~__GFP_DIRECT_RECLAIM;
+			css_put(&memcg->css);
+		}
+
+		can_pre_oom = !(gfp_mask & __GFP_DIRECT_RECLAIM);
+	}
+
+#endif
+
 
 restart:
 	compaction_retries = 0;
@@ -4820,6 +4846,10 @@ retry:
 	if (!can_direct_reclaim)
 		goto nopage;
 
+	/* Caller is going to oom, skip direct compact and reclaim */
+	if (can_pre_oom)
+		goto oom;
+
 	/* Avoid recursion of direct reclaim */
 	if (current->flags & PF_MEMALLOC)
 		goto nopage;
@@ -4916,6 +4946,7 @@ retry:
 	    check_retry_zonelist(zonelist_iter_cookie))
 		goto restart;
 
+oom:
 	/* Reclaim has failed us, start killing things */
 	page = __alloc_pages_may_oom(gfp_mask, order, ac, &did_some_progress);
 	if (page)

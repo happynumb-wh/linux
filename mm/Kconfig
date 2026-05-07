@@ -1482,6 +1482,13 @@ config LAZY_MMU_MODE_KUNIT_TEST
 
 	  If unsure, say N.
 
+config PRE_OOM
+	bool "Enable pre oom control"
+	depends on MEMCG
+	help
+	  This feature is used to ensure that higher priority tasks would not enter the direct
+	  reclaim path when applying for memory allocation.
+
 source "mm/damon/Kconfig"
 
 endmenu

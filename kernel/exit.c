@@ -71,7 +71,9 @@
 #include <linux/unwind_deferred.h>
 #include <linux/uaccess.h>
 #include <linux/pidfs.h>
-
+#ifdef CONFIG_PRE_OOM
+#include <linux/pre_oom.h>
+#endif
 #include <uapi/linux/wait.h>
 
 #include <asm/unistd.h>
@@ -1006,7 +1008,14 @@ void __noreturn do_exit(long code)
 		put_page(tsk->task_frag.page);
 
 	exit_task_stack_account(tsk);
-
+#ifdef CONFIG_PRE_OOM
+	/*
+	 * Killed task has been stalled in reclaim path, release the semaphore
+	 * here.
+	 */
+	if (unlikely(tsk->reclaim_stall))
+		pre_oom_leave();
+#endif
 	check_stack_usage();
 	preempt_disable();
 	if (tsk->nr_dirtied)

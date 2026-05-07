@@ -391,6 +391,9 @@ struct mem_cgroup {
 	int num_oom_skip;
 	struct mem_cgroup *next_reset;
 
+#ifdef CONFIG_PRE_OOM
+	bool pre_oom;
+#endif
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)
 	CK_KABI_RESERVE(3)

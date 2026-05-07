@@ -26,6 +26,11 @@ void drain_all_stock(struct mem_cgroup *root_memcg);
 
 unsigned long memcg_events(struct mem_cgroup *memcg, int event);
 int memory_stat_show(struct seq_file *m, void *v);
+#ifdef CONFIG_PRE_OOM
+u64 memcg_pre_oom_read(struct cgroup_subsys_state *css, struct cftype *cft);
+int memcg_pre_oom_write(struct cgroup_subsys_state *css,
+			struct cftype *cft, u64 val);
+#endif /* CONFIG_PRE_OOM */
 
 struct mem_cgroup *mem_cgroup_private_id_get_online(struct mem_cgroup *memcg,
 						    unsigned int n);

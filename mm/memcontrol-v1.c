@@ -2372,6 +2372,13 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.write = memcg_lru_gen_write,
 	},
 #endif
+#ifdef CONFIG_PRE_OOM
+	{
+		.name = "pre_oom",
+		.write_u64 = memcg_pre_oom_write,
+		.read_u64 = memcg_pre_oom_read,
+	},
+#endif
 	{ },	/* terminate */
 };
 

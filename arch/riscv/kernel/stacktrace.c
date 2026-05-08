@@ -12,6 +12,7 @@
 #include <linux/stacktrace.h>
 #include <linux/ftrace.h>
 #include <linux/kprobes.h>
+#include <linux/llist.h>
 
 #include <asm/stacktrace.h>
 
@@ -183,77 +184,420 @@ noinline noinstr void arch_stack_walk(stack_trace_consume_fn consume_entry, void
 	walk_stackframe(task, regs, consume_entry, cookie);
 }
 
+/*
+ * Per-cpu stacks are only accessible when unwinding the current task in a
+ * non-preemptible context.
+ */
+#define STACKINFO_CPU(name)					\
+	({							\
+		((task == current) && !preemptible())		\
+			? stackinfo_get_##name()		\
+			: stackinfo_get_unknown();		\
+	})
+
+/*
+ * RISC-V kernel unwind state and helpers.
+ *
+ * See: arch/arm64/kernel/stacktrace.c for the reference implementation.
+ *
+ * Note: These functions assume CONFIG_FRAME_POINTER is enabled.
+ */
+
+enum kunwind_source {
+	KUNWIND_SOURCE_UNKNOWN,
+	KUNWIND_SOURCE_FRAME,
+	KUNWIND_SOURCE_CALLER,
+	KUNWIND_SOURCE_TASK,
+	KUNWIND_SOURCE_REGS_PC,
+};
+
+union unwind_flags {
+	unsigned long	all;
+	struct {
+		unsigned long	fgraph : 1,
+				kretprobe : 1;
+	};
+};
+
+/*
+ * Kernel unwind state
+ *
+ * @common:    Common unwind state.
+ * @task:      The task being unwound.
+ * @graph_idx: Used by ftrace_graph_ret_addr() for optimized stack unwinding.
+ * @kr_cur:    When KRETPROBES is selected, holds the kretprobe instance
+ *             associated with the most recently encountered replacement ra
+ *             value.
+ */
+struct kunwind_state {
+	struct unwind_state common;
+	struct task_struct *task;
+	int graph_idx;
+#ifdef CONFIG_KRETPROBES
+	struct llist_node *kr_cur;
+#endif
+	enum kunwind_source source;
+	union unwind_flags flags;
+	struct pt_regs *regs;
+};
+
+static __always_inline void
+kunwind_init(struct kunwind_state *state,
+	     struct task_struct *task)
+{
+	unwind_init_common(&state->common);
+	state->task = task;
+	state->source = KUNWIND_SOURCE_UNKNOWN;
+	state->flags.all = 0;
+	state->regs = NULL;
+}
+
+/*
+ * Start an unwind from a pt_regs.
+ *
+ * The unwind will begin at the PC within the regs.
+ *
+ * The regs must be on a stack currently owned by the calling task.
+ */
+static __always_inline void
+kunwind_init_from_regs(struct kunwind_state *state,
+		       struct pt_regs *regs)
+{
+	kunwind_init(state, current);
+
+	state->regs = regs;
+	state->common.fp = frame_pointer(regs);
+	state->common.pc = instruction_pointer(regs);
+	state->source = KUNWIND_SOURCE_REGS_PC;
+}
+
+/*
+ * Start an unwind from a caller.
+ *
+ * The unwind will begin at the caller of whichever function this is inlined
+ * into.
+ *
+ * The function which invokes this must be noinline.
+ */
+static __always_inline void
+kunwind_init_from_caller(struct kunwind_state *state)
+{
+	kunwind_init(state, current);
+
+	state->common.fp = (unsigned long)__builtin_frame_address(1);
+	state->common.pc = (unsigned long)__builtin_return_address(0);
+	state->source = KUNWIND_SOURCE_CALLER;
+}
+
+/*
+ * Start an unwind from a blocked task.
+ *
+ * The unwind will begin at the blocked task's saved PC (i.e. the caller of
+ * __switch_to).
+ *
+ * The caller should ensure the task is blocked in __switch_to for the
+ * duration of the unwind, or the unwind will be bogus. It is never valid to
+ * call this for the current task.
+ */
+static __always_inline void
+kunwind_init_from_task(struct kunwind_state *state,
+		       struct task_struct *task)
+{
+	kunwind_init(state, task);
+
+	state->common.fp = task->thread.s[0];
+	state->common.pc = task->thread.ra;
+	state->source = KUNWIND_SOURCE_TASK;
+}
+
+static __always_inline int
+kunwind_recover_return_address(struct kunwind_state *state)
+{
+#ifdef CONFIG_FUNCTION_GRAPH_TRACER
+	if (state->task->ret_stack &&
+	    (state->common.pc == (unsigned long)return_to_handler)) {
+		unsigned long orig_pc;
+		orig_pc = ftrace_graph_ret_addr(state->task, &state->graph_idx,
+						state->common.pc,
+						(void *)state->common.fp);
+		if (state->common.pc == orig_pc) {
+			WARN_ON_ONCE(state->task == current);
+			return -EINVAL;
+		}
+		state->common.pc = orig_pc;
+		state->flags.fgraph = 1;
+	}
+#endif /* CONFIG_FUNCTION_GRAPH_TRACER */
+
+#ifdef CONFIG_KRETPROBES
+	if (is_kretprobe_trampoline(state->common.pc)) {
+		unsigned long orig_pc;
+		orig_pc = kretprobe_find_ret_addr(state->task,
+						  (void *)state->common.fp,
+						  &state->kr_cur);
+		if (!orig_pc)
+			return -EINVAL;
+		state->common.pc = orig_pc;
+		state->flags.kretprobe = 1;
+	}
+#endif /* CONFIG_KRETPROBES */
+
+	return 0;
+}
+
+/*
+ * When we reach an exception boundary marked by a metadata frame record,
+ * extract pt_regs from the stack and continue unwinding from the saved
+ * context (epc and s0/fp).
+ *
+ * On RISC-V, fp points above the metadata record, so the record's
+ * frame_record portion is at fp - sizeof(struct frame_record).
+ */
+static __always_inline int
+kunwind_next_regs_pc(struct kunwind_state *state)
+{
+	struct stack_info *info;
+	unsigned long fp = state->common.fp;
+	struct pt_regs *regs;
+
+	regs = container_of((unsigned long *)(fp - sizeof(struct frame_record)),
+			    struct pt_regs, stackframe.record.fp);
+
+	info = unwind_find_stack(&state->common, (unsigned long)regs,
+				 sizeof(*regs));
+	if (!info)
+		return -EINVAL;
+
+	unwind_consume_stack(&state->common, info, (unsigned long)regs,
+			     sizeof(*regs));
+
+	state->regs = regs;
+	state->common.pc = regs->epc;
+	state->common.fp = frame_pointer(regs);
+	state->regs = NULL;
+	state->source = KUNWIND_SOURCE_REGS_PC;
+	return 0;
+}
+
+/*
+ * Handle a metadata frame record embedded in pt_regs.
+ *
+ * On RISC-V, fp points above the record (fp = metadata + 16), so the
+ * frame_record_meta starts at fp - sizeof(struct frame_record).
+ *
+ * FRAME_META_TYPE_FINAL: This is the outermost exception entry
+ *   (user -> kernel). Unwinding terminates successfully.
+ * FRAME_META_TYPE_PT_REGS: This is a nested exception entry
+ *   (kernel -> kernel). Continue unwinding from the saved context.
+ */
+static __always_inline int
+kunwind_next_frame_record_meta(struct kunwind_state *state)
+{
+	struct task_struct *tsk = state->task;
+	unsigned long fp = state->common.fp;
+	unsigned long meta_base = fp - sizeof(struct frame_record);
+	struct frame_record_meta *meta;
+	struct stack_info *info;
+
+	info = unwind_find_stack(&state->common, meta_base, sizeof(*meta));
+	if (!info)
+		return -EINVAL;
+
+	meta = (struct frame_record_meta *)meta_base;
+	switch (READ_ONCE(meta->type)) {
+	case FRAME_META_TYPE_FINAL:
+		if (meta == &task_pt_regs(tsk)->stackframe)
+			return -ENOENT;
+		WARN_ON_ONCE(tsk == current);
+		return -EINVAL;
+	case FRAME_META_TYPE_PT_REGS:
+		return kunwind_next_regs_pc(state);
+	default:
+		WARN_ON_ONCE(tsk == current);
+		return -EINVAL;
+	}
+}
+
+/*
+ * Unwind from one frame record to the next.
+ *
+ * On RISC-V, the frame record sits at fp - sizeof(struct frame_record),
+ * immediately below the address pointed to by fp/s0. This applies to both
+ * normal frame records and metadata frame records (embedded in pt_regs).
+ *
+ * A metadata record is identified by both fp and ra being zero in the
+ * frame_record portion, with a type value following at fp + 16.
+ */
+static __always_inline int
+kunwind_next_frame_record(struct kunwind_state *state)
+{
+	unsigned long fp = state->common.fp;
+	struct frame_record *record;
+	struct stack_info *info;
+	unsigned long new_fp, new_pc;
+	unsigned long record_base;
+
+	if (fp & 0x7)
+	{
+		pr_info("kunwind: bad stack frame %lx\n", fp);
+		return -EINVAL;
+	}
+		
+
+	record_base = fp - sizeof(*record);
+
+	info = unwind_find_stack(&state->common, record_base, sizeof(*record));
+	if (!info)
+	{
+		pr_info("kunwind: bad stack frame %lx\n", record_base);
+		return -EINVAL;
+	}
+		
+
+	record = (struct frame_record *)record_base;
+	new_fp = READ_ONCE(record->fp);
+	new_pc = READ_ONCE(record->ra);
+
+	if (!new_fp && !new_pc)
+		return kunwind_next_frame_record_meta(state);
+
+	unwind_consume_stack(&state->common, info, record_base,
+			     sizeof(*record));
+
+	state->common.fp = new_fp;
+	state->common.pc = new_pc;
+	state->source = KUNWIND_SOURCE_FRAME;
+
+	return 0;
+}
+
+/*
+ * Unwind from one frame record (A) to the next frame record (B).
+ *
+ * We terminate early if the location of B indicates a malformed chain of frame
+ * records (e.g. a cycle), determined based on the location and fp value of A
+ * and the location (but not the fp value) of B.
+ */
+static __always_inline int
+kunwind_next(struct kunwind_state *state)
+{
+	int err;
+
+	state->flags.all = 0;
+
+	switch (state->source) {
+	case KUNWIND_SOURCE_FRAME:
+	case KUNWIND_SOURCE_CALLER:
+	case KUNWIND_SOURCE_TASK:
+	case KUNWIND_SOURCE_REGS_PC:
+		err = kunwind_next_frame_record(state);
+		break;
+	default:
+		err = -EINVAL;
+	}
+
+	if (err)
+		return err;
+
+	return kunwind_recover_return_address(state);
+}
+
+typedef bool (*kunwind_consume_fn)(const struct kunwind_state *state, void *cookie);
+
+static __always_inline int
+do_kunwind(struct kunwind_state *state, kunwind_consume_fn consume_state,
+	   void *cookie)
+{
+	int ret;
+
+	ret = kunwind_recover_return_address(state);
+	if (ret)
+		return ret;
+
+	while (1) {
+		if (!consume_state(state, cookie))
+			return -EINVAL;
+		ret = kunwind_next(state);
+		if (ret == -ENOENT)
+			return 0;
+		if (ret < 0)
+			return ret;
+	}
+}
+
+static __always_inline int
+kunwind_stack_walk(kunwind_consume_fn consume_state,
+		   void *cookie, struct task_struct *task,
+		   struct pt_regs *regs)
+{
+	struct stack_info stacks[] = {
+		stackinfo_get_task(task),
+		STACKINFO_CPU(irq),
+#ifdef CONFIG_VMAP_STACK
+		STACKINFO_CPU(overflow),
+#endif
+	};
+	struct kunwind_state state = {
+		.common = {
+			.stacks = stacks,
+			.nr_stacks = ARRAY_SIZE(stacks),
+		},
+	};
+
+	if (regs) {
+		if (task != current)
+			return -EINVAL;
+		kunwind_init_from_regs(&state, regs);
+	} else if (task == current) {
+		kunwind_init_from_caller(&state);
+	} else {
+		kunwind_init_from_task(&state, task);
+	}
+
+	return do_kunwind(&state, consume_state, cookie);
+}
+
+struct kunwind_consume_entry_data {
+	stack_trace_consume_fn consume_entry;
+	void *cookie;
+};
+
+static __always_inline bool
+arch_kunwind_consume_entry(const struct kunwind_state *state, void *cookie)
+{
+	struct kunwind_consume_entry_data *data = cookie;
+
+	return data->consume_entry(data->cookie, state->common.pc);
+}
+
+static __always_inline bool
+arch_reliable_kunwind_consume_entry(const struct kunwind_state *state, void *cookie)
+{
+	/*
+	 * At an exception boundary we can reliably consume the saved PC. We do
+	 * not know whether the LR was live when the exception was taken, and
+	 * so we cannot perform the next unwind step reliably.
+	 *
+	 * All that matters is whether the *entire* unwind is reliable, so give
+	 * up as soon as we hit an exception boundary.
+	 */
+	if (state->source == KUNWIND_SOURCE_REGS_PC)
+		return false;
+
+	return arch_kunwind_consume_entry(state, cookie);
+}
+
 noinline noinstr int arch_stack_walk_reliable(stack_trace_consume_fn consume_entry,
 					      void *cookie,
 					      struct task_struct *task)
 {
-	unsigned long fp, sp, pc;
-	int graph_idx = 0;
-	int level = 0;
-#ifdef CONFIG_KRETPROBES
-	struct llist_node *kr_cur = NULL;
-#endif
+	struct kunwind_consume_entry_data data = {
+		.consume_entry = consume_entry,
+		.cookie = cookie,
+	};
 
-	if (!task)
-		task = current;
-
-	if (task == current) {
-		fp = (unsigned long)__builtin_frame_address(0);
-		sp = current_stack_pointer;
-		pc = (unsigned long)arch_stack_walk_reliable;
-		level = -1;
-	} else {
-		/* The caller guarantees that a non-current task is inactive. */
-		fp = task->thread.s[0];
-		sp = task->thread.sp;
-		pc = task->thread.ra;
-	}
-
-	for (;;) {
-		struct stackframe *frame;
-		unsigned long frame_ra;
-
-		if (unlikely(!__kernel_text_address(pc)))
-			return -EINVAL;
-
-		if (level++ >= 0 && !consume_entry(cookie, pc))
-			return -EINVAL;
-
-		if (unlikely(!fp_is_valid(fp, sp)))
-			break;
-
-		frame = (struct stackframe *)fp - 1;
-		sp = fp;
-
-		fp = READ_ONCE_TASK_STACK(task, frame->fp);
-		frame_ra = READ_ONCE_TASK_STACK(task, frame->ra);
-		pc = ftrace_graph_ret_addr(task, &graph_idx, frame_ra,
-					   &frame->ra);
-		if (pc == (unsigned long)return_to_handler)
-			return -EINVAL;
-
-		/*
-		 * At an exception boundary we can trust the saved exception PC,
-		 * but not whether the interrupted RA had already been saved in
-		 * a regular frame. Stop here like arm64's reliable unwinder.
-		 */
-		if (pc >= (unsigned long)handle_exception &&
-		    pc < (unsigned long)&ret_from_exception_end)
-			return -EINVAL;
-
-#ifdef CONFIG_KRETPROBES
-		if (is_kretprobe_trampoline(pc)) {
-			pc = kretprobe_find_ret_addr(task, (void *)fp, &kr_cur);
-			if (!pc)
-				return -EINVAL;
-		}
-#endif
-
-		if (is_kretprobe_trampoline(pc))
-			return -EINVAL;
-	}
-
-	return 0;
+	return kunwind_stack_walk(arch_reliable_kunwind_consume_entry, &data,
+				  task, NULL);
 }
 
 /*

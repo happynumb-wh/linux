@@ -4574,6 +4574,171 @@ void lru_gen_reparent_memcg(struct mem_cgroup *memcg, struct mem_cgroup *parent,
 	}
 }
 
+int lru_gen_print_memcg(struct seq_file *m, struct mem_cgroup *memcg)
+{
+	int nid;
+
+	for_each_node_state(nid, N_MEMORY) {
+		struct lruvec *lruvec;
+		struct lru_gen_folio *lrugen;
+		unsigned long seq;
+
+		lruvec = get_lruvec(memcg, nid);
+		if (!lruvec)
+			continue;
+
+		DEFINE_MAX_SEQ(lruvec);
+		DEFINE_MIN_SEQ(lruvec);
+
+		lrugen = &lruvec->lrugen;
+
+		seq_printf(m, "node %5d\n", nid);
+
+		seq = evictable_min_seq(min_seq, MAX_SWAPPINESS / 2);
+
+		for (; seq <= max_seq; seq++) {
+			int gen = lru_gen_from_seq(seq);
+			unsigned long birth = READ_ONCE(lrugen->timestamps[gen]);
+			unsigned long anon = 0, file = 0;
+			bool anon_valid = seq >= min_seq[LRU_GEN_ANON];
+			bool file_valid = seq >= min_seq[LRU_GEN_FILE];
+			int zone;
+
+			if (anon_valid) {
+				for (zone = 0; zone < MAX_NR_ZONES; zone++)
+					anon += max(READ_ONCE(lrugen->nr_pages[gen][LRU_GEN_ANON][zone]), 0L);
+			}
+
+			if (file_valid) {
+				for (zone = 0; zone < MAX_NR_ZONES; zone++)
+					file += max(READ_ONCE(lrugen->nr_pages[gen][LRU_GEN_FILE][zone]), 0L);
+			}
+
+			seq_printf(m, " %10lu %10u ", seq,
+				   jiffies_to_msecs(jiffies - birth));
+
+			if (anon_valid)
+				seq_printf(m, "%10lu ", anon);
+			else
+				seq_printf(m, "%10s ", "none");
+
+			if (file_valid)
+				seq_printf(m, "%10lu\n", file);
+			else
+				seq_printf(m, "%10s\n", "none");
+		}
+	}
+
+	return 0;
+}
+
+static int run_aging(struct lruvec *lruvec, unsigned long seq,
+		     int swappiness, bool force_scan);
+
+static int run_eviction(struct lruvec *lruvec, unsigned long seq,
+			struct scan_control *sc, int swappiness,
+			unsigned long nr_to_reclaim);
+
+static int run_cmd_memcg(char cmd, struct mem_cgroup *memcg, int nid,
+			 unsigned long seq, struct scan_control *sc,
+			 int swappiness, unsigned long opt)
+{
+	struct lruvec *lruvec;
+
+	if (nid < 0 || nid >= MAX_NUMNODES || !node_state(nid, N_MEMORY))
+		return -EINVAL;
+
+	lruvec = get_lruvec(memcg, nid);
+
+	if (swappiness < MIN_SWAPPINESS)
+		swappiness = get_swappiness(lruvec, sc);
+	else if (swappiness > MAX_SWAPPINESS + 1)
+		return -EINVAL;
+
+	sc->target_mem_cgroup = memcg;
+
+	switch (cmd) {
+	case '+':
+		return run_aging(lruvec, seq, swappiness, !!opt);
+	case '-':
+		return run_eviction(lruvec, seq, sc, swappiness, opt);
+	default:
+		return -EINVAL;
+	}
+}
+
+/*
+ * helper: implement write semantics for /sys/fs/cgroup/.../memory.lru_gen
+ * cmd format: "+ nid seq [swappiness] [force_scan]" or "- nid seq [swappiness] [nr_to_reclaim]"
+ */
+ssize_t lru_gen_memcg_write(struct kernfs_open_file *of,
+			    char *buf, size_t nbytes, loff_t off)
+{
+	char *cur, *next;
+	unsigned int flags;
+	struct blk_plug plug;
+	int err = -EINVAL;
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+
+	struct scan_control sc = {
+		.may_writepage = true,
+		.may_unmap = true,
+		.may_swap = true,
+		.reclaim_idx = MAX_NR_ZONES - 1,
+		.gfp_mask = GFP_KERNEL,
+		.proactive = true,
+	};
+
+	if (off)
+		return -EINVAL;
+	if (!memcg)
+		return -EINVAL;
+
+	next = strstrip(buf);
+
+	set_task_reclaim_state(current, &sc.reclaim_state);
+	flags = memalloc_noreclaim_save();
+	blk_start_plug(&plug);
+
+	if (!set_mm_walk(NULL, true)) {
+		err = -ENOMEM;
+		goto done;
+	}
+
+	while ((cur = strsep(&next, ",;\n"))) {
+		int n, end;
+		char cmd;
+		unsigned int nid;
+		unsigned long seq;
+		unsigned int swappiness = -1;
+		unsigned long opt = -1;
+
+		cur = skip_spaces(cur);
+		if (!*cur)
+			continue;
+
+		n = sscanf(cur, "%c %u %lu %n %u %n %lu %n",
+			   &cmd, &nid, &seq,
+			   &end, &swappiness, &end, &opt, &end);
+		if (n < 3 || cur[end]) {
+			err = -EINVAL;
+			break;
+		}
+
+		err = run_cmd_memcg(cmd, memcg, nid, seq, &sc, swappiness, opt);
+		if (err)
+			break;
+	}
+
+done:
+	clear_mm_walk();
+	blk_finish_plug(&plug);
+	memalloc_noreclaim_restore(flags);
+	set_task_reclaim_state(current, NULL);
+
+	return err ? : nbytes;
+}
+
 #endif /* CONFIG_MEMCG */
 
 /******************************************************************************
@@ -4823,6 +4988,7 @@ static int evict_folios(unsigned long nr_to_scan, struct lruvec *lruvec,
 	bool skip_retry = false;
 	struct mem_cgroup *memcg = lruvec_memcg(lruvec);
 	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
+	struct lru_gen_folio *lrugen = &lruvec->lrugen;
 
 	lruvec_lock_irq(lruvec);
 
@@ -4887,6 +5053,9 @@ retry:
 	item = PGSTEAL_KSWAPD + reclaimer_offset(sc);
 	mod_lruvec_state(lruvec, item, reclaimed);
 	mod_lruvec_state(lruvec, PGSTEAL_ANON + type, reclaimed);
+
+	if (sc->proactive)
+		atomic_long_add(reclaimed, &lrugen->proactive_reclaimed[type]);
 
 	list_splice_init(&clean, &list);
 

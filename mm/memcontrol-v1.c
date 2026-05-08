@@ -2365,6 +2365,13 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.seq_show = memory_oom_group_show,
 		.write = memory_oom_group_write,
 	},
+#ifdef CONFIG_LRU_GEN
+	{
+		.name = "lru_gen",
+		.seq_show = memcg_lru_gen_show,
+		.write = memcg_lru_gen_write,
+	},
+#endif
 	{ },	/* terminate */
 };
 

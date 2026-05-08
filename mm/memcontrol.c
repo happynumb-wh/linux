@@ -2567,9 +2567,30 @@ static u64 memcg_exstat_gather(struct mem_cgroup *memcg,
 int memcg_exstat_show(struct seq_file *m, void *v)
 {
 	struct mem_cgroup *memcg = mem_cgroup_from_css(seq_css(m));
+	int __maybe_unused nid;
 
 	seq_printf(m, "wmark_reclaim_work_ms %llu\n",
 		   memcg_exstat_gather(memcg, MEMCG_WMARK_RECLAIM) >> 20);
+
+#ifdef CONFIG_LRU_GEN
+	for_each_node_state(nid, N_MEMORY) {
+		struct lruvec *lruvec;
+		struct lru_gen_folio *lrugen;
+		unsigned long anon_pages, file_pages;
+
+		lruvec = mem_cgroup_lruvec(memcg, NODE_DATA(nid));
+		if (!lruvec)
+			continue;
+
+		lrugen = &lruvec->lrugen;
+		anon_pages = atomic_long_read(&lrugen->proactive_reclaimed[LRU_GEN_ANON]);
+		file_pages = atomic_long_read(&lrugen->proactive_reclaimed[LRU_GEN_FILE]);
+
+		seq_printf(m, "proactive_reclaim_node%d_kb %lu %lu\n", nid,
+			anon_pages << (PAGE_SHIFT - 10),
+			file_pages << (PAGE_SHIFT - 10));
+	}
+#endif /* CONFIG_LRU_GEN */
 
 	return 0;
 }
@@ -5350,6 +5371,21 @@ static ssize_t memory_reclaim(struct kernfs_open_file *of, char *buf,
 	return nbytes;
 }
 
+#ifdef CONFIG_LRU_GEN
+int memcg_lru_gen_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_seq(m);
+
+	return lru_gen_print_memcg(m, memcg);
+}
+
+ssize_t memcg_lru_gen_write(struct kernfs_open_file *of,
+				   char *buf, size_t nbytes, loff_t off)
+{
+	return lru_gen_memcg_write(of, buf, nbytes, off);
+}
+#endif
+
 static struct cftype memory_files[] = {
 	{
 		.name = "current",
@@ -5502,6 +5538,13 @@ static struct cftype memory_files[] = {
 		.flags = CFTYPE_NS_DELEGATABLE,
 		.write = memory_reclaim,
 	},
+#ifdef CONFIG_LRU_GEN
+	{
+		.name = "lru_gen",
+		.seq_show = memcg_lru_gen_show,
+		.write = memcg_lru_gen_write,
+	},
+#endif
 	{ }	/* terminate */
 };
 

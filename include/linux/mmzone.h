@@ -581,6 +581,8 @@ struct lru_gen_folio {
 	/* can be modified without holding the LRU lock */
 	atomic_long_t evicted[NR_HIST_GENS][ANON_AND_FILE][MAX_NR_TIERS];
 	atomic_long_t refaulted[NR_HIST_GENS][ANON_AND_FILE][MAX_NR_TIERS];
+	/* stat: pages reclaimed via multi-gen LRU proactive reclaim */
+	atomic_long_t proactive_reclaimed[ANON_AND_FILE];
 	/* whether the multi-gen LRU is enabled */
 	bool enabled;
 	/* the memcg generation this lru_gen_folio belongs to */
@@ -701,6 +703,11 @@ void lru_gen_soft_reclaim(struct mem_cgroup *memcg, int nid);
 void max_lru_gen_memcg(struct mem_cgroup *memcg, int nid);
 bool recheck_lru_gen_max_memcg(struct mem_cgroup *memcg, int nid);
 void lru_gen_reparent_memcg(struct mem_cgroup *memcg, struct mem_cgroup *parent, int nid);
+struct seq_file;
+int lru_gen_print_memcg(struct seq_file *m, struct mem_cgroup *memcg);
+struct kernfs_open_file;
+ssize_t lru_gen_memcg_write(struct kernfs_open_file *of,
+			    char *buf, size_t nbytes, loff_t off);
 
 #else /* !CONFIG_LRU_GEN */
 
@@ -754,6 +761,19 @@ static inline bool recheck_lru_gen_max_memcg(struct mem_cgroup *memcg, int nid)
 static inline
 void lru_gen_reparent_memcg(struct mem_cgroup *memcg, struct mem_cgroup *parent, int nid)
 {
+}
+
+struct seq_file;
+static inline int lru_gen_print_memcg(struct seq_file *m, struct mem_cgroup *memcg)
+{
+	return 0;
+}
+
+struct kernfs_open_file;
+static inline ssize_t lru_gen_memcg_write(struct kernfs_open_file *of,
+			    char *buf, size_t nbytes, loff_t off)
+{
+	return 0;
 }
 
 #endif /* CONFIG_LRU_GEN */

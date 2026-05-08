@@ -30,6 +30,14 @@ int memory_stat_show(struct seq_file *m, void *v);
 struct mem_cgroup *mem_cgroup_private_id_get_online(struct mem_cgroup *memcg,
 						    unsigned int n);
 
+#ifdef CONFIG_LRU_GEN
+struct seq_file;
+struct kernfs_open_file;
+int memcg_lru_gen_show(struct seq_file *m, void *v);
+ssize_t memcg_lru_gen_write(struct kernfs_open_file *of,
+		char *buf, size_t nbytes, loff_t off);
+#endif
+
 /* Cgroup v1-specific declarations */
 #ifdef CONFIG_MEMCG_V1
 

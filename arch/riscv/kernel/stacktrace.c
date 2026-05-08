@@ -282,10 +282,13 @@ kunwind_init_from_regs(struct kunwind_state *state,
 static __always_inline void
 kunwind_init_from_caller(struct kunwind_state *state)
 {
+	unsigned long fp = (unsigned long)__builtin_frame_address(0);
+	struct frame_record *record = (struct frame_record *)fp - 1;
+
 	kunwind_init(state, current);
 
-	state->common.fp = (unsigned long)__builtin_frame_address(1);
-	state->common.pc = (unsigned long)__builtin_return_address(0);
+	state->common.fp = READ_ONCE(record->fp);
+	state->common.pc = READ_ONCE(record->ra);
 	state->source = KUNWIND_SOURCE_CALLER;
 }
 

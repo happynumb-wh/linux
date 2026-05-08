@@ -2243,6 +2243,14 @@ static long tcmu_ioctl_cmd_zerocopy(struct tcmu_dev *udev, unsigned long arg)
 	for (i = 0; i < zc.iov_cnt; i++) {
 		ret = tcmu_zerocopy_one_seg(tiov, vma, &sgiter);
 		if (ret < 0) {
+			/* Rollback already mapped pages */
+			int j;
+			unsigned long address;
+
+			for (j = 0; j <= i; j++) {
+				address = (unsigned long)iov[j].iov_base;
+				zap_vma_range(vma, address, iov[j].iov_len);
+			}
 			kfree(iov);
 			goto out;
 		}

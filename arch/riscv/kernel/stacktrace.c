@@ -442,7 +442,6 @@ kunwind_next_frame_record(struct kunwind_state *state)
 
 	if (fp & 0x7)
 	{
-		pr_info("kunwind: bad stack frame %lx\n", fp);
 		return -EINVAL;
 	}
 		
@@ -452,7 +451,6 @@ kunwind_next_frame_record(struct kunwind_state *state)
 	info = unwind_find_stack(&state->common, record_base, sizeof(*record));
 	if (!info)
 	{
-		pr_info("kunwind: bad stack frame %lx\n", record_base);
 		return -EINVAL;
 	}
 		

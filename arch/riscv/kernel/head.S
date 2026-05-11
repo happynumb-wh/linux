@@ -14,6 +14,7 @@
 #include <asm/hwcap.h>
 #include <asm/image.h>
 #include <asm/scs.h>
+#include <asm/stacktrace/frame.h>
 #include <asm/usercfi.h>
 #include "efi-header.S"
 
@@ -184,7 +185,7 @@ secondary_start_sbi:
 	 * Without this, the first frame records can inherit an undefined caller
 	 * fp and unwind past smp_callin() into .Lsecondary_park.
 	 */
-	addi s0, sp, S_STACKFRAME + 16
+	addi s0, sp, S_STACKFRAME + STACKFRAME_SIZE_ON_STACK
 	scs_load_current
 	call smp_callin
 #endif /* CONFIG_SMP */
@@ -321,11 +322,11 @@ SYM_CODE_START(_start_kernel)
 	 * fp/s0 points above the metadata record (RISC-V
 	 * convention). This mirrors ARM64's init_cpu_task.
 	 */
-	REG_S zero, S_STACKFRAME(sp)
-	REG_S zero, (S_STACKFRAME+8)(sp)
-	li t0, 1 /* FRAME_META_TYPE_FINAL */
+	REG_S zero, (S_STACKFRAME + STACKFRAME_FP)(sp)
+	REG_S zero, (S_STACKFRAME + STACKFRAME_RA)(sp)
+	li t0, FRAME_META_TYPE_FINAL
 	REG_S t0, S_STACKFRAME_TYPE(sp)
-	addi s0, sp, S_STACKFRAME + 16
+	addi s0, sp, S_STACKFRAME + STACKFRAME_SIZE_ON_STACK
 
 #if defined(CONFIG_RISCV_SBI) && defined(CONFIG_RISCV_USER_CFI)
 	li a7, SBI_EXT_FWFT

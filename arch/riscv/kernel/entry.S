@@ -198,8 +198,8 @@ SYM_CODE_START(handle_exception)
 	 * Create a metadata frame record. The unwinder will use this to
 	 * identify and unwind exception boundaries.
 	 */
-	REG_S zero, S_STACKFRAME(sp)         /* stackframe.record.fp = 0 */
-	REG_S zero, (S_STACKFRAME+8)(sp)     /* stackframe.record.ra = 0 */
+	REG_S zero, (S_STACKFRAME + STACKFRAME_FP)(sp) /* stackframe.record.fp = 0 */
+	REG_S zero, (S_STACKFRAME + STACKFRAME_RA)(sp) /* stackframe.record.ra = 0 */
 #ifdef CONFIG_RISCV_M_MODE
 	li t0, SR_MPP
 	and t0, s1, t0
@@ -213,7 +213,7 @@ SYM_CODE_START(handle_exception)
 	li t0, FRAME_META_TYPE_PT_REGS
 2:
 	REG_S t0, S_STACKFRAME_TYPE(sp)
-	addi s0, sp, S_STACKFRAME + 16
+	addi s0, sp, S_STACKFRAME + STACKFRAME_SIZE_ON_STACK
 
 	/*
 	 * Set the scratch register to 0, so that if a recursive exception

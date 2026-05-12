@@ -320,7 +320,7 @@ SYM_CODE_START(_start_kernel)
 	 * the unwinder can identify the outermost frame by its
 	 * {fp, ra} = {0, 0} sentinel at the bottom of pt_regs.
 	 * fp/s0 points above the metadata record (RISC-V
-	 * convention). This mirrors ARM64's init_cpu_task.
+	 * convention).
 	 */
 	REG_S zero, (S_STACKFRAME + STACKFRAME_FP)(sp)
 	REG_S zero, (S_STACKFRAME + STACKFRAME_RA)(sp)

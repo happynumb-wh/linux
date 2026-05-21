@@ -185,7 +185,7 @@ secondary_start_sbi:
 	 * Without this, the first frame records can inherit an undefined caller
 	 * fp and unwind past smp_callin() into .Lsecondary_park.
 	 */
-	addi s0, sp, S_STACKFRAME + STACKFRAME_SIZE_ON_STACK
+	addi s0, sp, S_STACKFRAME + STACKFRAME_RECORD_SIZE
 	scs_load_current
 	call smp_callin
 #endif /* CONFIG_SMP */
@@ -326,7 +326,7 @@ SYM_CODE_START(_start_kernel)
 	REG_S zero, (S_STACKFRAME + STACKFRAME_RA)(sp)
 	li t0, FRAME_META_TYPE_FINAL
 	REG_S t0, S_STACKFRAME_TYPE(sp)
-	addi s0, sp, S_STACKFRAME + STACKFRAME_SIZE_ON_STACK
+	addi s0, sp, S_STACKFRAME + STACKFRAME_RECORD_SIZE
 
 #if defined(CONFIG_RISCV_SBI) && defined(CONFIG_RISCV_USER_CFI)
 	li a7, SBI_EXT_FWFT

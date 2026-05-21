@@ -90,7 +90,7 @@ void notrace walk_stackframe(struct task_struct *task, struct pt_regs *regs,
 			fp = READ_ONCE_TASK_STACK(task, frame->fp);
 			pc = READ_ONCE_TASK_STACK(task, frame->ra);
 			pc = ftrace_graph_ret_addr(current, &graph_idx, pc,
-						   &frame->ra);
+						   (void *)fp);
 			if (pc >= (unsigned long)handle_exception &&
 			    pc < (unsigned long)&ret_from_exception_end) {
 				if (unlikely(!fn(arg, pc)))
@@ -148,12 +148,12 @@ static bool print_trace_address(void *arg, unsigned long pc)
 noinline void dump_backtrace(struct pt_regs *regs, struct task_struct *task,
 		    const char *loglvl)
 {
-	walk_stackframe(task, regs, print_trace_address, (void *)loglvl);
+	printk("%sCall Trace:\n", loglvl);
+	arch_stack_walk(print_trace_address, (void *)loglvl, task, regs);
 }
 
 void show_stack(struct task_struct *task, unsigned long *sp, const char *loglvl)
 {
-	pr_cont("%sCall Trace:\n", loglvl);
 	dump_backtrace(NULL, task, loglvl);
 }
 
@@ -178,17 +178,11 @@ unsigned long __get_wchan(struct task_struct *task)
 	return pc;
 }
 
-noinline noinstr void arch_stack_walk(stack_trace_consume_fn consume_entry, void *cookie,
-		     struct task_struct *task, struct pt_regs *regs)
-{
-	walk_stackframe(task, regs, consume_entry, cookie);
-}
-
 /*
  * Per-cpu stacks are only accessible when unwinding the current task in a
  * non-preemptible context.
  */
-#define STACKINFO_CPU(name)					\
+#define STACKINFO_CPU(task, name)				\
 	({							\
 		((task == current) && !preemptible())		\
 			? stackinfo_get_##name()		\
@@ -441,19 +435,13 @@ kunwind_next_frame_record(struct kunwind_state *state)
 	unsigned long record_base;
 
 	if (fp & 0x7)
-	{
 		return -EINVAL;
-	}
-		
 
 	record_base = fp - sizeof(*record);
 
 	info = unwind_find_stack(&state->common, record_base, sizeof(*record));
 	if (!info)
-	{
 		return -EINVAL;
-	}
-		
 
 	record = (struct frame_record *)record_base;
 	new_fp = READ_ONCE(record->fp);
@@ -531,11 +519,12 @@ kunwind_stack_walk(kunwind_consume_fn consume_state,
 		   void *cookie, struct task_struct *task,
 		   struct pt_regs *regs)
 {
+	struct task_struct *tsk = task ?: current;
 	struct stack_info stacks[] = {
-		stackinfo_get_task(task),
-		STACKINFO_CPU(irq),
+		stackinfo_get_task(tsk),
+		STACKINFO_CPU(tsk, irq),
 #ifdef CONFIG_VMAP_STACK
-		STACKINFO_CPU(overflow),
+		STACKINFO_CPU(tsk, overflow),
 #endif
 	};
 	struct kunwind_state state = {
@@ -546,13 +535,13 @@ kunwind_stack_walk(kunwind_consume_fn consume_state,
 	};
 
 	if (regs) {
-		if (task != current)
+		if (tsk != current)
 			return -EINVAL;
 		kunwind_init_from_regs(&state, regs);
-	} else if (task == current) {
+	} else if (tsk == current) {
 		kunwind_init_from_caller(&state);
 	} else {
-		kunwind_init_from_task(&state, task);
+		kunwind_init_from_task(&state, tsk);
 	}
 
 	return do_kunwind(&state, consume_state, cookie);
@@ -570,6 +559,27 @@ arch_kunwind_consume_entry(const struct kunwind_state *state, void *cookie)
 
 	return data->consume_entry(data->cookie, state->common.pc);
 }
+
+#ifdef CONFIG_FRAME_POINTER
+noinline noinstr void arch_stack_walk(stack_trace_consume_fn consume_entry,
+				      void *cookie, struct task_struct *task,
+				      struct pt_regs *regs)
+{
+	struct kunwind_consume_entry_data data = {
+		.consume_entry = consume_entry,
+		.cookie = cookie,
+	};
+
+	kunwind_stack_walk(arch_kunwind_consume_entry, &data, task, regs);
+}
+#else
+noinline noinstr void arch_stack_walk(stack_trace_consume_fn consume_entry,
+				      void *cookie, struct task_struct *task,
+				      struct pt_regs *regs)
+{
+	walk_stackframe(task, regs, consume_entry, cookie);
+}
+#endif
 
 static __always_inline bool
 arch_reliable_kunwind_consume_entry(const struct kunwind_state *state, void *cookie)

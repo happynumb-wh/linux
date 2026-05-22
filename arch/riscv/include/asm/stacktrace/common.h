@@ -156,37 +156,4 @@ static inline void unwind_consume_stack(struct unwind_state *state,
 	state->stack.low = sp + size;
 }
 
-/**
- * unwind_next_frame_record() - Unwind to the next frame record.
- *
- * @state: the current unwind state.
- *
- * Return: 0 upon success, an error code otherwise.
- */
-static inline int
-unwind_next_frame_record(struct unwind_state *state)
-{
-	struct stack_info *info;
-	struct frame_record *record;
-	unsigned long fp = state->fp;
-
-	if (fp & 0x7)
-		return -EINVAL;
-
-	info = unwind_find_stack(state, fp, sizeof(*record));
-	if (!info)
-		return -EINVAL;
-
-	unwind_consume_stack(state, info, fp, sizeof(*record));
-
-	/*
-	 * Record this frame record's values.
-	 */
-	record = (struct frame_record *)fp;
-	state->fp = READ_ONCE(record->fp);
-	state->pc = READ_ONCE(record->ra);
-
-	return 0;
-}
-
 #endif /* __ASM_RISCV_STACKTRACE_COMMON_H */

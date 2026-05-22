@@ -16,95 +16,11 @@
 
 #include <asm/stacktrace.h>
 
-#ifdef CONFIG_FRAME_POINTER
-
 /*
- * This disables KASAN checking when reading a value from another task's stack,
- * since the other task could be running on another CPU and could have poisoned
- * the stack in the meantime.
+ * Non-frame-pointer fallback unwinder.
+ * Only compiled when CONFIG_FRAME_POINTER is not enabled.
  */
-#define READ_ONCE_TASK_STACK(task, x)			\
-({							\
-	unsigned long val;				\
-	unsigned long addr = x;				\
-	if ((task) == current)				\
-		val = READ_ONCE(addr);			\
-	else						\
-		val = READ_ONCE_NOCHECK(addr);		\
-	val;						\
-})
-
-extern asmlinkage void handle_exception(void);
-extern unsigned long ret_from_exception_end;
-
-static inline int fp_is_valid(unsigned long fp, unsigned long sp)
-{
-	unsigned long low, high;
-
-	low = sp + sizeof(struct stackframe);
-	high = ALIGN(sp, THREAD_SIZE);
-
-	return !(fp < low || fp > high || fp & 0x07);
-}
-
-void notrace walk_stackframe(struct task_struct *task, struct pt_regs *regs,
-			     bool (*fn)(void *, unsigned long), void *arg)
-{
-	unsigned long fp, sp, pc;
-	int graph_idx = 0;
-	int level = 0;
-
-	if (regs) {
-		fp = frame_pointer(regs);
-		sp = user_stack_pointer(regs);
-		pc = instruction_pointer(regs);
-	} else if (task == NULL || task == current) {
-		fp = (unsigned long)__builtin_frame_address(0);
-		sp = current_stack_pointer;
-		pc = (unsigned long)walk_stackframe;
-		level = -1;
-	} else {
-		/* task blocked in __switch_to */
-		fp = task->thread.s[0];
-		sp = task->thread.sp;
-		pc = task->thread.ra;
-	}
-
-	for (;;) {
-		struct stackframe *frame;
-
-		if (unlikely(!__kernel_text_address(pc) || (level++ >= 0 && !fn(arg, pc))))
-			break;
-
-		if (unlikely(!fp_is_valid(fp, sp)))
-			break;
-
-		/* Unwind stack frame */
-		frame = (struct stackframe *)fp - 1;
-		sp = fp;
-		if (regs && (regs->epc == pc) && fp_is_valid(frame->ra, sp)) {
-			/* We hit function where ra is not saved on the stack */
-			fp = frame->ra;
-			pc = regs->ra;
-		} else {
-			fp = READ_ONCE_TASK_STACK(task, frame->fp);
-			pc = READ_ONCE_TASK_STACK(task, frame->ra);
-			pc = ftrace_graph_ret_addr(current, &graph_idx, pc,
-						   (void *)fp);
-			if (pc >= (unsigned long)handle_exception &&
-			    pc < (unsigned long)&ret_from_exception_end) {
-				if (unlikely(!fn(arg, pc)))
-					break;
-
-				pc = ((struct pt_regs *)sp)->epc;
-				fp = ((struct pt_regs *)sp)->s0;
-			}
-		}
-
-	}
-}
-
-#else /* !CONFIG_FRAME_POINTER */
+#ifndef CONFIG_FRAME_POINTER
 
 void notrace walk_stackframe(struct task_struct *task,
 	struct pt_regs *regs, bool (*fn)(void *, unsigned long), void *arg)
@@ -135,7 +51,12 @@ void notrace walk_stackframe(struct task_struct *task,
 	}
 }
 
-#endif /* CONFIG_FRAME_POINTER */
+#endif /* !CONFIG_FRAME_POINTER */
+
+/*
+ * Common trace helpers.
+ * These are used by both the FP (kunwind) and non-FP (walk_stackframe) paths.
+ */
 
 static bool print_trace_address(void *arg, unsigned long pc)
 {
@@ -173,10 +94,18 @@ unsigned long __get_wchan(struct task_struct *task)
 
 	if (!try_get_task_stack(task))
 		return 0;
-	walk_stackframe(task, NULL, save_wchan, &pc);
+	arch_stack_walk(save_wchan, &pc, task, NULL);
 	put_task_stack(task);
 	return pc;
 }
+
+/*
+ * Frame-pointer-based kernel unwind infrastructure.
+ * Only compiled when CONFIG_FRAME_POINTER is enabled.
+ *
+ * See: arch/arm64/kernel/stacktrace.c for the reference implementation.
+ */
+#ifdef CONFIG_FRAME_POINTER
 
 /*
  * Per-cpu stacks are only accessible when unwinding the current task in a
@@ -188,14 +117,6 @@ unsigned long __get_wchan(struct task_struct *task)
 			? stackinfo_get_##name()		\
 			: stackinfo_get_unknown();		\
 	})
-
-/*
- * RISC-V kernel unwind state and helpers.
- *
- * See: arch/arm64/kernel/stacktrace.c for the reference implementation.
- *
- * Note: These functions assume CONFIG_FRAME_POINTER is enabled.
- */
 
 enum kunwind_source {
 	KUNWIND_SOURCE_UNKNOWN,
@@ -560,27 +481,6 @@ arch_kunwind_consume_entry(const struct kunwind_state *state, void *cookie)
 	return data->consume_entry(data->cookie, state->common.pc);
 }
 
-#ifdef CONFIG_FRAME_POINTER
-noinline noinstr void arch_stack_walk(stack_trace_consume_fn consume_entry,
-				      void *cookie, struct task_struct *task,
-				      struct pt_regs *regs)
-{
-	struct kunwind_consume_entry_data data = {
-		.consume_entry = consume_entry,
-		.cookie = cookie,
-	};
-
-	kunwind_stack_walk(arch_kunwind_consume_entry, &data, task, regs);
-}
-#else
-noinline noinstr void arch_stack_walk(stack_trace_consume_fn consume_entry,
-				      void *cookie, struct task_struct *task,
-				      struct pt_regs *regs)
-{
-	walk_stackframe(task, regs, consume_entry, cookie);
-}
-#endif
-
 static __always_inline bool
 arch_reliable_kunwind_consume_entry(const struct kunwind_state *state, void *cookie)
 {
@@ -598,6 +498,47 @@ arch_reliable_kunwind_consume_entry(const struct kunwind_state *state, void *coo
 	return arch_kunwind_consume_entry(state, cookie);
 }
 
+#endif /* CONFIG_FRAME_POINTER */
+
+/*
+ * arch_stack_walk — dual implementation.
+ *
+ * When CONFIG_FRAME_POINTER is enabled, uses the kunwind infrastructure for
+ * robust frame-pointer-based unwinding, consistent with arch_stack_walk_reliable.
+ *
+ * When CONFIG_FRAME_POINTER is disabled, falls back to the simple stack scan
+ * in walk_stackframe().
+ */
+#ifdef CONFIG_FRAME_POINTER
+
+noinline noinstr void arch_stack_walk(stack_trace_consume_fn consume_entry,
+				      void *cookie, struct task_struct *task,
+				      struct pt_regs *regs)
+{
+	struct kunwind_consume_entry_data data = {
+		.consume_entry = consume_entry,
+		.cookie = cookie,
+	};
+
+	kunwind_stack_walk(arch_kunwind_consume_entry, &data, task, regs);
+}
+
+#else
+
+noinline noinstr void arch_stack_walk(stack_trace_consume_fn consume_entry,
+				      void *cookie, struct task_struct *task,
+				      struct pt_regs *regs)
+{
+	walk_stackframe(task, regs, consume_entry, cookie);
+}
+
+#endif /* CONFIG_FRAME_POINTER */
+
+/*
+ * Reliable stack walk for livepatch (CONFIG_FRAME_POINTER only).
+ */
+#ifdef CONFIG_FRAME_POINTER
+
 noinline noinstr int arch_stack_walk_reliable(stack_trace_consume_fn consume_entry,
 					      void *cookie,
 					      struct task_struct *task)
@@ -610,6 +551,8 @@ noinline noinstr int arch_stack_walk_reliable(stack_trace_consume_fn consume_ent
 	return kunwind_stack_walk(arch_reliable_kunwind_consume_entry, &data,
 				  task, NULL);
 }
+
+#endif /* CONFIG_FRAME_POINTER */
 
 /*
  * Get the return address for a single stackframe and return a pointer to the

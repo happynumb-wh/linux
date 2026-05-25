@@ -104,6 +104,7 @@ unsigned long __get_wchan(struct task_struct *task)
  * Only compiled when CONFIG_FRAME_POINTER is enabled.
  *
  * See: arch/arm64/kernel/stacktrace.c for the reference implementation.
+ * Most of the unwinder code is copy from arm64
  */
 #ifdef CONFIG_FRAME_POINTER
 
@@ -113,7 +114,7 @@ unsigned long __get_wchan(struct task_struct *task)
  */
 #define STACKINFO_CPU(task, name)				\
 	({							\
-		((task == current) && !preemptible())		\
+		(((task) == current) && !preemptible())		\
 			? stackinfo_get_##name()		\
 			: stackinfo_get_unknown();		\
 	})
@@ -233,8 +234,9 @@ kunwind_recover_return_address(struct kunwind_state *state)
 {
 #ifdef CONFIG_FUNCTION_GRAPH_TRACER
 	if (state->task->ret_stack &&
-	    (state->common.pc == (unsigned long)return_to_handler)) {
+	    state->common.pc == (unsigned long)return_to_handler) {
 		unsigned long orig_pc;
+
 		orig_pc = ftrace_graph_ret_addr(state->task, &state->graph_idx,
 						state->common.pc,
 						(void *)state->common.fp);

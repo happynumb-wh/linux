@@ -2516,6 +2516,7 @@ int remap_pfn_range_notrack(struct vm_area_struct *vma, unsigned long addr,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(remap_pfn_range_notrack);
 
 /**
  * remap_pfn_range - remap kernel memory to userspace

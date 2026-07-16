@@ -14,7 +14,16 @@ static void ident_pmd_init(struct x86_mapping_info *info, pmd_t *pmd_page,
 		if (pmd_present(*pmd))
 			continue;
 
-		set_pmd(pmd, __pmd((addr - info->offset) | info->page_flag));
+/***************************************************************************************
+ * Modified by HMTT --Begin
+ **************************************************************************************/
+		// set_pmd(pmd, __pmd((addr - info->offset) | info->page_flag));
+	    WRITE_ONCE(*pmd, __pmd((addr - info->offset) | info->page_flag));
+
+/***************************************************************************************
+ * Modified by HMTT --End
+ **************************************************************************************/
+
 	}
 }
 

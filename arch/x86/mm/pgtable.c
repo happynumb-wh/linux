@@ -873,3 +873,1057 @@ int pmd_free_pte_page(pmd_t *pmd, unsigned long addr)
 
 #endif /* CONFIG_X86_64 */
 #endif	/* CONFIG_HAVE_ARCH_HUGE_VMAP */
+
+/************************************************************************************
+ *  Printk PageTable Infomation -- Begin
+ *
+ *  Author: Yungang Bao
+ *  Date:   July 10, 2009
+ *  Modified By: clc, 22/2/2011
+ *               ZCG, 09/10/2023 (dd/mm/yyyy)
+ *  Last Edited on 12/12/2023
+ *  ********************************************************************************/
+#include <linux/sched/task.h>
+#include <linux/sched/signal.h>
+#include <asm/pgtable_64.h>
+
+#define PAGE_TABLE_DEBUG__
+#ifdef PAGE_TABLE_DEBUG__
+#include <linux/spinlock.h>
+#include <asm/current.h>
+
+
+//#define PTE_KERNEL_PRINTK__
+
+#define  PAGE_TABLE_TRACE_SIZE  13
+
+char               page_table_val[16];
+EXPORT_SYMBOL(page_table_val);
+
+
+char set_page_table_magic   = 0xec;
+char free_page_table_magic  = 0xfc;
+char free_page_table_get_clear = 0x22;
+char free_page_table_get_clear_full = 0x33;
+
+char set_huge_page_table_magic   = 0x44;   // set_pmd_at(), native_set_pmd()
+char free_huge_page_table_magic  = 0x55;   // native_pmd_clear()
+char free_huge_page_table_get_clear = 0x66;   // pmdp_huge_get_and_clear()
+
+///////////////////////////////////////////////////////////////////////////////////////////
+//we need to monitor the page table physical address to decide whether is the page table memory access
+////////////////////////////////////////////////////////////
+#define  DUMP_PT_ADDR_TRACE
+
+//##define  PRINTK_PT_ADDR_DEBUG
+
+#ifdef   DUMP_PT_ADDR_TRACE
+char set_pt_addr_magic      = 0xed;
+char free_pt_addr_magic     = 0xfd;
+int pt_addr_trace           = 0;
+EXPORT_SYMBOL(pt_addr_trace);
+EXPORT_SYMBOL(set_pt_addr_magic);
+
+
+unsigned long long pt_addr_pgd_flag = 0x08ULL << 48;
+unsigned long long pt_addr_pud_flag = 0x04ULL << 48;
+unsigned long long pt_addr_pmd_flag = 0x02ULL << 48;
+unsigned long long pt_addr_pte_flag = 0x01ULL << 48;
+
+#endif
+///////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+unsigned long long all_set_pte_cnt = 0;
+unsigned long long set_pte_at_cnt =  0;
+unsigned long long native_set_pte_cnt = 0;
+
+unsigned long long all_pte_clear_cnt = 0;
+unsigned long long native_pte_clear_cnt = 0;
+unsigned long long ptep_get_and_clear_cnt = 0;
+unsigned long long ptep_get_and_clear_full_cnt = 0;
+
+unsigned long long all_set_pmd_cnt = 0;
+unsigned long long set_pmd_at_cnt = 0;
+unsigned long long native_set_pmd_cnt = 0;
+
+unsigned long long all_pmd_clear_cnt = 0;
+unsigned long long native_pmd_clear_cnt = 0;
+unsigned long long pmdp_huge_get_and_clear_cnt = 0;
+
+
+unsigned long long dump_set_pte_cnt = 0;
+unsigned long long dump_set_other_cnt = 0;
+
+
+unsigned int       *pid_trace;
+unsigned long long *pte_trace;
+unsigned long long *pmd_trace;
+
+EXPORT_SYMBOL(pid_trace);
+EXPORT_SYMBOL(pte_trace);
+EXPORT_SYMBOL(pmd_trace);
+
+int                page_table_trace = 0;
+
+int page_table_kernel_printk = 0;
+int num_pte_kernel_printk = 0;
+int max_num_pte_kernel_printk = 10;
+
+ #define E1K_USE_SPINLOCK 
+#ifdef E1K_USE_SPINLOCK
+/* Modified by Zhang Jiutian, 28/3/2014 */
+//spinlock_t e1k_dma_lock = SPIN_LOCK_UNLOCKED;
+spinlock_t e1k_dma_lock = __SPIN_LOCK_UNLOCKED();
+unsigned long page_table_flags = 0;
+extern spinlock_t e1k_dma_lock;
+EXPORT_SYMBOL(e1k_dma_lock);
+#endif
+
+
+#define PAGE_TABLE_USE_SPINLOCK 
+#ifdef PAGE_TABLE_USE_SPINLOCK
+/*********************************************************************************
+ * we just dump the page table, omit the dma trace
+ * the e1k_dma_lock is used to protect the kernel buf dump op, so it must be used with context switch
+ * ******************************************************************************/
+//extern spinlock_t  e1k_dma_lock;
+
+//unsigned long      page_table_flags; //what is this pgtbl_flags doing for
+#endif
+
+/*******************************************************************************
+ * There functions are used to printk some help message in kernel log messages
+ * ****************************************************************************/
+void page_table_print_start(void)
+{
+    printk("**********************************************\n");
+}
+
+void page_table_print_end(void)
+{
+    printk("**********************************************\n\n");
+}
+
+
+#ifdef   DUMP_PT_ADDR_TRACE
+int pt_addr_start_trace(void)
+{
+        pt_addr_trace = 1;
+        page_table_print_start();
+        printk("<1>pt_addr_start_trace!\n");
+        page_table_print_end();
+
+        return 0;
+}
+int pt_addr_stop_trace(void)
+{
+        pt_addr_trace = 0;
+        page_table_print_start();
+        printk("<1>pt_addr_stop_trace!\n");
+        page_table_print_end();
+
+        return 0;
+}
+#endif
+int page_table_start_trace(void)
+{
+
+    page_table_trace = 1;
+
+    page_table_print_start();
+    printk("page_table_start_trace!\n");
+    page_table_print_end();
+
+    return 0;
+}
+
+int page_table_stop_trace(void)
+{
+    page_table_trace = 0;
+
+    page_table_print_start();
+    printk("page_table_stop_trace!\n");
+    page_table_print_end();
+
+    return 0;
+}
+int page_table_set_kernel_printk(void)
+{
+        page_table_kernel_printk = 1;
+        num_pte_kernel_printk = 0;
+        return 0;
+}
+
+int page_table_reset_kernel_printk(void)
+{
+        page_table_kernel_printk = 0;
+        num_pte_kernel_printk = 0;
+        return 0;
+}
+
+//this must be called at the exit of dump trace process, show all 
+int page_table_stop_and_clear_trace(void)
+{
+    page_table_print_start();
+    printk("page_table_stop_and_clear_trace!\n");
+
+    page_table_trace = 0;
+    printk("all_set_pte_cnt  [%llu]\n",all_set_pte_cnt);
+    printk("set_pte_at_cnt [%llu]\n",set_pte_at_cnt);
+	printk("native_set_pte_cnt [%llu]\n",native_set_pte_cnt);
+
+    printk("all_pte_clear_cnt [%llu]\n",all_pte_clear_cnt);
+	printk("native_pte_clear_cnt [%llu]\n",native_pte_clear_cnt);
+    printk("ptep_get_and_clear_cnt [%llu]\n\n",ptep_get_and_clear_cnt);
+    printk("ptep_get_and_clear_full_cnt [%llu]\n",ptep_get_and_clear_full_cnt);
+
+	printk("all_set_pmd_cnt [%llu]\n",all_set_pmd_cnt);
+	printk("set_pmd_at_cnt [%llu]\n",set_pmd_at_cnt);
+	printk("native_set_pmd_cnt [%llu]\n",native_set_pmd_cnt);
+
+	printk("all_pmd_clear_cnt [%llu]\n",all_pmd_clear_cnt);
+	printk("native_pmd_clear_cnt [%llu]\n",native_pmd_clear_cnt);
+	printk("pmdp_huge_get_and_clear_cnt [%llu]\n",pmdp_huge_get_and_clear_cnt);
+
+
+    printk("dump_set_pte_cnt [%llu]\n",dump_set_pte_cnt);
+    printk("dump_set_other_cnt [%llu]\n",dump_set_other_cnt);
+    page_table_print_end();
+
+    all_set_pte_cnt = 0;
+    set_pte_at_cnt =  0;
+	native_set_pte_cnt =  0;
+
+    all_pte_clear_cnt = 0;
+    native_pte_clear_cnt = 0;
+    ptep_get_and_clear_cnt = 0;
+	ptep_get_and_clear_full_cnt =  0;
+
+	all_set_pmd_cnt =  0;
+	set_pmd_at_cnt =  0;
+	native_set_pmd_cnt =  0;
+
+	all_pmd_clear_cnt =  0;
+	native_pmd_clear_cnt =  0;
+	pmdp_huge_get_and_clear_cnt =  0;
+
+
+    dump_set_pte_cnt = 0;
+    dump_set_other_cnt = 0;
+
+    return 0;
+}
+
+/***********************************************************************************************
+ * init the printk_for_trace function pointer to an empty fuction
+ * ********************************************************************************************/
+void printk_nothing(void *ptr, size_t size)
+{
+}
+
+void  (*printk_for_trace)(void *ptr, size_t size) = &printk_nothing;
+
+//printk_for_trace = &printk_nothing;
+
+
+inline void page_table_trace_printk(void * ptr,size_t size)
+{
+    (*printk_for_trace)(ptr,size);
+}
+
+EXPORT_SYMBOL(page_table_trace_printk);
+//////////////////////////////////////////
+////
+//// Dump Page Table
+////
+///////////////////////////////////////////
+
+int dump_pte_range(int pid, pmd_t* pmd, unsigned long addr, unsigned long end)
+{
+        pte_t *pte;
+        int   pfn;
+again:
+	/* Modified by Zhang Jiutian, 28/3/2014 */
+	//pte = pte_offset_map_nested(pmd, addr);
+	pte = pte_offset_map(pmd, addr);
+
+	do {
+
+            if (pte_none(*pte)) 
+	        continue;
+         
+            pfn = (pte->pte) >> PAGE_SHIFT;
+            if(pte_present(*pte) && pfn_valid(pfn)){
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+                        spin_lock_irqsave(&e1k_dma_lock,page_table_flags);
+#endif
+                page_table_val[0] = set_page_table_magic;                //1. fill magic char
+//		page_table_val[0] = set_pt_addr_magic;                //1. fill magic char
+                pid_trace = (unsigned int*)(&(page_table_val[1]));       //2. fill pid
+                pte_trace = (unsigned long long*)(&(page_table_val[5])); //3. fill pte
+            
+                *pid_trace = pid; //(mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+                *pte_trace = (unsigned long long)(((addr >> PAGE_SHIFT) << 24)
+                           | pte_pfn(*pte) /*(pte->pte >> PAGE_SHIFT)*/);
+ 
+            dump_set_pte_cnt ++;
+                page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+                        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags);
+#endif		
+		if(page_table_kernel_printk)	
+		{
+			if( num_pte_kernel_printk < max_num_pte_kernel_printk ){
+				printk("<1>## <%d>th type:0x%x,pid:%d,vpn:%llu,ppn:%lu\n",num_pte_kernel_printk,set_page_table_magic,pid,(addr >> PAGE_SHIFT),(pte->pte >> PAGE_SHIFT));
+				num_pte_kernel_printk++;
+			}
+		}
+		
+            }
+	} while (pte++, addr += PAGE_SIZE, addr != end);
+
+	/* Modified by Zhang Jiutian, 28/3/2014 */
+	//pte_unmap_nested(pte - 1); /*NOP*/
+	pte_unmap(pte - 1); /*NOP*/
+	if (addr != end)
+		goto again;
+
+	return 0;
+
+}
+
+int dump_pmd_range(int pid, pud_t* pud, unsigned long addr, unsigned long end)
+{
+	pmd_t *pmd;
+	int pfn;
+	unsigned long next;
+
+	pmd = pmd_offset(pud, addr);
+	do {
+		next = pmd_addr_end(addr, end);
+		if (pmd_none(*pmd))
+			continue;
+
+#ifdef   DUMP_PT_ADDR_TRACE
+		/////////////////////////////////////////////////////////////////////////////////////////////////
+		//////////////////////////////////////////////////////////////////
+		if(pt_addr_trace)
+		{
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+                spin_lock_irqsave(&e1k_dma_lock,page_table_flags);
+#endif
+				pfn = (pmd->pmd) >> PAGE_SHIFT;
+				if (pmd_large(*pmd) && pmd_present(*pmd) && pfn_valid(pfn)) {
+					page_table_val[0] = set_huge_page_table_magic;                //1. fill magic char
+                	pid_trace = (unsigned int*)(&(page_table_val[1]));       //2. fill pid
+                	pmd_trace = (unsigned long long*)(&(page_table_val[5])); //3. fill pmd
+
+                	*pid_trace = pid; //(mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+                	*pmd_trace = (unsigned long long)(((addr >> PMD_SHIFT) << 24) | pmd_pfn(*pmd));
+
+                	page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+
+					// zcg:
+					// this pmd point to a large page,
+					// we do not enter dump_pte_range for this pmd,
+					// but before we continue while loop,
+					// we need to unlock the spin_lock.
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+                    spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags);
+#endif
+					continue;   
+				}
+
+				dump_set_other_cnt ++;
+
+#ifdef PRINTK_PT_ADDR_DEBUG
+
+//                        printk("<1>dump pmd_pfn:virt=0x%lx,phys=0x%lx--%lx\n",(unsigned long)pmd,(pmd_val(*pmd) >> PAGE_SHIFT),__pa(pmd));
+#endif			
+
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+                        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags);
+#endif
+		}
+		/////////////////////////////////////////////////////////////////
+		/////////////////////////////////////////////////////////////////////////////////////////////////		
+#endif
+
+		if (dump_pte_range(pid, pmd, addr, next))
+			return -ENOMEM;
+	} while (pmd++, addr = next, addr != end);
+	return 0;
+}
+
+int dump_pud_range(int pid, p4d_t* p4d, unsigned long addr, unsigned long end)
+{
+    pud_t *pud;
+    unsigned long next;
+
+    pud = pud_offset(p4d, addr);
+    do {
+	next = pud_addr_end(addr, end);
+	if (pud_none(*pud))
+	    continue;
+
+#ifdef   DUMP_PT_ADDR_TRACE
+		/////////////////////////////////////////////////////////////////////////////////////////////////
+                //////////////////////////////////////////////////////////////////
+		if(pt_addr_trace)
+		{
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+                        spin_lock_irqsave(&e1k_dma_lock,page_table_flags);
+#endif
+                	page_table_val[0] = set_pt_addr_magic;                //1. fill magic char
+                	pid_trace = (unsigned int*)(&(page_table_val[1]));       //2. fill pid
+                	pte_trace = (unsigned long long*)(&(page_table_val[5])); //3. fill pte
+
+                	*pid_trace = pid; //(mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+                	*pte_trace = (unsigned long long)(((addr >> PAGE_SHIFT) << 24)
+                        	   | (pud_val(*pud) >> PAGE_SHIFT));
+
+//                	page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+//			dump_set_other_cnt ++;
+
+#ifdef PRINTK_PT_ADDR_DEBUG
+                        //printk("<1>dump pud_pfn:0x%lu\n",(pud_val(*pud) >> PAGE_SHIFT));
+//			printk("<1>dump pud_pfn:virt=0x%lx,phys=0x%lx--%lx\n",(unsigned long)pud,(pud_val(*pud) >> PAGE_SHIFT),__pa(pud));
+#endif
+
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+                        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags);
+#endif
+		}
+                /////////////////////////////////////////////////////////////////
+                /////////////////////////////////////////////////////////////////////////////////////////////////   
+#endif
+
+        if (dump_pmd_range(pid, pud, addr, next))
+  	    return -ENOMEM;
+    } while (pud++, addr = next, addr != end);
+
+    return 0;
+}    
+
+// lhf add
+int dump_p4d_range(int pid, pgd_t* pgd, unsigned long addr, unsigned long end)
+{
+    p4d_t *p4d;
+    unsigned long next;
+
+    p4d = p4d_offset(pgd, addr);
+    do {
+    next = p4d_addr_end(addr, end);
+    if (p4d_none(*p4d))
+        continue;
+
+#ifdef   DUMP_PT_ADDR_TRACE
+        /////////////////////////////////////////////////////////////////////////////////////////////////
+                //////////////////////////////////////////////////////////////////
+        if(pt_addr_trace)
+        {
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+                        spin_lock_irqsave(&e1k_dma_lock,page_table_flags);
+#endif
+                    page_table_val[0] = set_pt_addr_magic;                //1. fill magic char
+                    pid_trace = (unsigned int*)(&(page_table_val[1]));       //2. fill pid
+                    pte_trace = (unsigned long long*)(&(page_table_val[5])); //3. fill pte
+
+                    *pid_trace = pid; //(mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+                    *pte_trace = (unsigned long long)(((addr >> PAGE_SHIFT) << 24)
+                               | (p4d_val(*p4d) >> PAGE_SHIFT));
+
+  //                  page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+//		    dump_set_other_cnt ++;
+
+#ifdef PRINTK_PT_ADDR_DEBUG
+                        //printk("<1>dump p4d_pfn:0x%lu\n",(p4d_val(*p4d) >> PAGE_SHIFT));
+//            printk("<1>dump p4d_pfn:virt=0x%lx,phys=0x%lx--%lx\n",(unsigned long)p4d,(p4d_val(*p4d) >> PAGE_SHIFT),__pa(p4d));
+#endif
+
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+                        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags);
+#endif
+        }
+                /////////////////////////////////////////////////////////////////
+                /////////////////////////////////////////////////////////////////////////////////////////////////   
+#endif
+
+        if (dump_pud_range(pid, p4d, addr, next))
+        return -ENOMEM;
+    } while (p4d++, addr = next, addr != end);
+
+    return 0;
+}    
+
+
+int dump_vm_area(int pid, struct mm_struct* mm, struct vm_area_struct* vma)
+{
+    
+    pgd_t *pgd;
+    unsigned long next;
+    unsigned long addr = vma->vm_start;
+    unsigned long end = vma->vm_end;
+    
+    pgd = pgd_offset(mm, addr);
+    do {
+	next = pgd_addr_end(addr, end);
+	if (pgd_none(*pgd))
+		continue;
+
+#ifdef   DUMP_PT_ADDR_TRACE
+		/////////////////////////////////////////////////////////////////////////////////////////////////
+                //////////////////////////////////////////////////////////////////
+                if(pt_addr_trace)
+		{
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+      		      	spin_lock_irqsave(&e1k_dma_lock,page_table_flags);
+#endif
+			page_table_val[0] = set_pt_addr_magic;                //1. fill magic char
+                	pid_trace = (unsigned int*)(&(page_table_val[1]));       //2. fill pid
+                	pte_trace = (unsigned long long*)(&(page_table_val[5])); //3. fill pte
+
+                	*pid_trace = pid; //(mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+                	*pte_trace = (unsigned long long)(((addr >> PAGE_SHIFT) << 24)
+                        	   | (pgd_val(*pgd) >> PAGE_SHIFT));
+
+//                	page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+
+#ifdef PRINTK_PT_ADDR_DEBUG
+                        //printk("<1>dump pgd_pfn:0x%lu\n",(pgd_val(*pgd) >> PAGE_SHIFT));
+//			printk("<1>dump pgd_pfn:virt=0x%lx,phys=0x%lx--%lx\n",(unsigned long)pgd,(pgd_val(*pgd) >> PAGE_SHIFT),__pa(pgd));
+#endif
+
+			
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+            		spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags);
+#endif
+		}
+                /////////////////////////////////////////////////////////////////
+                ///////////////////////////////////////////////////////////////////////////////////////////////// 
+#endif
+
+
+	if (dump_p4d_range(pid, pgd, addr, next))
+		return -ENOMEM;
+    } while (pgd++, addr = next, addr != end);
+
+    return 0;
+}
+
+
+
+int dump_page_table_trace(void)
+{
+    /*
+ *      * for dump pagetable
+ *           */
+    struct task_struct *p;
+    struct mm_struct *mm;
+    struct vm_area_struct *vma;
+    int pid;
+    int dump_count = 0;
+   
+	if(page_table_kernel_printk)
+        {
+	        printk("<1>##############    Start Dump pagetable    ##################\n");
+	}
+ 
+    /* step.1 dump other processes pagetable */
+
+    for(p = &init_task; (p = next_task(p)) != &init_task; ) {
+        pid  = (p==&init_task) ? -1: p->pid;
+        printk("<1>pid=%5d  cmd=%s\n", pid, p->comm);
+        mm = p->mm;
+        if(mm == NULL)
+        {
+	   //return 0;
+		continue;
+	}	
+
+        spin_lock(&mm->page_table_lock);
+        for(vma = mm->mmap; vma; vma = vma->vm_next)
+            dump_vm_area(pid, mm, vma);
+        spin_unlock(&mm->page_table_lock);
+        
+        dump_count ++;
+    }//endof for(; p != &init_mm.mmlist; p = p->next)
+
+	if(page_table_kernel_printk)
+        {
+                printk("<1>##############    End Dump pagetable    ##################\n");
+		num_pte_kernel_printk = 0;
+        }
+
+    printk("<1>#### Dumped process number: %d\n", dump_count);
+    return 0;
+
+}
+
+EXPORT_SYMBOL(printk_nothing);
+EXPORT_SYMBOL(printk_for_trace);
+EXPORT_SYMBOL(dump_page_table_trace);
+EXPORT_SYMBOL(page_table_start_trace);
+EXPORT_SYMBOL(page_table_stop_trace);
+EXPORT_SYMBOL(page_table_stop_and_clear_trace);
+
+EXPORT_SYMBOL(page_table_set_kernel_printk);
+EXPORT_SYMBOL(page_table_reset_kernel_printk);
+
+#ifdef   DUMP_PT_ADDR_TRACE
+EXPORT_SYMBOL(pt_addr_start_trace);
+EXPORT_SYMBOL(pt_addr_stop_trace);
+#endif
+
+void inc_all_set_pte_cnt(void)             {if(page_table_trace) all_set_pte_cnt++;}
+void inc_set_pte_at_cnt(void)              {if(page_table_trace) set_pte_at_cnt++;}
+void inc_native_set_pte_cnt(void)          {if(page_table_trace) native_set_pte_cnt++;}
+
+void inc_all_pte_clear_cnt(void)           {if(page_table_trace) all_pte_clear_cnt++;}
+void inc_native_pte_clear_cnt(void)        {if(page_table_trace) native_pte_clear_cnt++;}
+void inc_ptep_get_and_clear_cnt(void)      {if(page_table_trace) ptep_get_and_clear_cnt++;}
+void inc_ptep_get_and_clear_full_cnt(void) {if(page_table_trace) ptep_get_and_clear_full_cnt++;}
+
+void inc_all_set_pmd_cnt(void)             {if(page_table_trace) all_set_pmd_cnt++;}
+void inc_set_pmd_at_cnt(void)              {if(page_table_trace) set_pmd_at_cnt++;}
+void inc_native_set_pmd_cnt(void)          {if(page_table_trace) native_set_pmd_cnt++;}
+
+void inc_all_pmd_clear_cnt (void)          {if(page_table_trace) all_pmd_clear_cnt++;}
+void inc_native_pmd_clear_cnt(void)        {if(page_table_trace) native_pmd_clear_cnt++;}
+void inc_pmdp_huge_get_and_clear_cnt(void) {if(page_table_trace) pmdp_huge_get_and_clear_cnt++;}
+
+#endif
+
+
+
+void set_pte_at(struct mm_struct *mm, unsigned long addr,
+				     pte_t *ptep , pte_t pte)
+{
+	inc_all_set_pte_cnt();
+	inc_set_pte_at_cnt();
+
+	page_table_check_pte_set(mm, addr, ptep, pte);
+	//set_pte(ptep, pte); // we do not want this set_pte to be recorded, because we have record the set_pte_at
+	WRITE_ONCE(*ptep, pte);
+
+#if 1
+#ifdef PAGE_TABLE_DEBUG__                       
+    if(page_table_trace){     
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_lock_irqsave(&e1k_dma_lock,page_table_flags); 
+#endif
+
+        page_table_val[0] = set_page_table_magic;
+        pid_trace = (unsigned int*)(&(page_table_val[1]));
+        pte_trace = (unsigned long long*)(&(page_table_val[5]));
+            
+        *pid_trace = (mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+        *pte_trace = (unsigned long long)(((addr >> PAGE_SHIFT) << 24) | pte_pfn(pte));
+
+        page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+		 
+		if(page_table_kernel_printk) {
+			if( /*num_pte_kernel_printk < max_num_pte_kernel_printk &&*/ /*pte.pte >= (2048ULL << 20) && pte.pte < (2560ULL<<20)*/ 1 ){
+				printk("<1>## type:0x%x,pid:%d,vpn:0x%llx,pte_val:0x%lx,pte:0x%llx--0x%lx,0x%lx\n",
+						set_page_table_magic,*pid_trace,(addr ),( pte_val(pte) ),*pte_trace,((addr >> PAGE_SHIFT) << 24),(pte.pte));
+				num_pte_kernel_printk ++;
+			}
+        }
+
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags); 
+#endif                                          
+    }
+#endif //PAGE_TABLE_DEBUG__
+#endif
+}
+EXPORT_SYMBOL(set_pte_at);
+
+void native_set_pte(pte_t *ptep, pte_t pte)
+{
+	inc_all_set_pte_cnt();
+	inc_native_set_pte_cnt();
+	
+	WRITE_ONCE(*ptep, pte);
+
+#if 1
+#ifdef PAGE_TABLE_DEBUG__                       
+	if(page_table_trace){
+#ifdef PAGE_TABLE_USE_SPINLOCK   
+        spin_lock_irqsave(&e1k_dma_lock,page_table_flags);
+#endif
+
+        page_table_val[0] = set_page_table_magic;
+        pid_trace = (unsigned int*)(&(page_table_val[1]));
+        pte_trace = (unsigned long long*)(&(page_table_val[5]));
+
+        *pid_trace = (current->mm == &init_mm)? (unsigned int)-1: (unsigned int)(current->pid);
+        *pte_trace = (unsigned long long)(pte.pte);
+
+        page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+
+	    if(page_table_kernel_printk) {
+	        if( /*num_pte_kernel_printk < max_num_pte_kernel_printk &&*/ /*pte.pte >= (2048ULL << 20) && pte.pte < (2560ULL<<20)*/ 1 ){
+	            // printk("<1>## type:0x%x,pid:%d,vpn:0x%llx,pte_val:0x%lx,pte:0x%llx--0x%lx,0x%lx\n",set_page_table_magic,*pid_trace,(addr ),( pte_val(pte) ),*pte_trace,((addr >> PAGE_SHIFT) << 24),(pte.pte));
+                            // num_pte_kernel_printk ++;
+            }
+        }
+
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags);
+#endif
+     }
+#endif //PAGE_TABLE_DEBUG__
+#endif
+}
+EXPORT_SYMBOL(native_set_pte);
+
+void native_pte_clear(struct mm_struct *mm, unsigned long addr,
+				    pte_t *ptep)
+{
+	inc_all_pte_clear_cnt();
+	inc_native_pte_clear_cnt();
+
+#ifdef PAGE_TABLE_DEBUG__                       
+    if(addr && page_table_trace){     
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_lock_irqsave(&e1k_dma_lock,page_table_flags); 
+#endif
+            
+        page_table_val[0] = free_page_table_magic;
+        pid_trace = (unsigned int*)(&(page_table_val[1]));
+        pte_trace = (unsigned long long*)(&(page_table_val[5]));
+            
+        *pid_trace = (mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+        *pte_trace = (unsigned long long)(((addr >> PAGE_SHIFT) << 24) | pte_pfn(*ptep));
+
+        page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+            
+		if(page_table_kernel_printk) {
+			if( num_pte_kernel_printk < max_num_pte_kernel_printk ) {
+				printk("<1>## type:0x%x,pid:%d,vpn:%llu,ppn:%lu\n",
+						free_page_table_magic,*pid_trace,(addr >> PAGE_SHIFT),(ptep->pte >> PAGE_SHIFT));
+				num_pte_kernel_printk++;
+			}
+        }
+
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags); 
+#endif                                          
+    }
+#endif //PAGE_TABLE_DEBUG__
+
+	native_set_pte(ptep, native_make_pte(0));
+}
+
+pte_t ptep_get_and_clear(struct mm_struct *mm, unsigned long addr,
+				       pte_t *ptep)
+{
+    pte_t pte;
+	
+	inc_all_pte_clear_cnt();
+    inc_ptep_get_and_clear_cnt();
+
+#ifdef PAGE_TABLE_DEBUG__                       
+    if(page_table_trace) {     
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_lock_irqsave(&e1k_dma_lock,page_table_flags); 
+#endif
+
+        page_table_val[0] = free_page_table_get_clear;
+        pid_trace = (unsigned int*)(&(page_table_val[1]));
+        pte_trace = (unsigned long long*)(&(page_table_val[5]));
+            
+        *pid_trace = (mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+        *pte_trace = (unsigned long long)(((addr >> PAGE_SHIFT) << 24) | pte_pfn(*ptep));
+
+        page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+            
+		if(page_table_kernel_printk) {
+			if( num_pte_kernel_printk < max_num_pte_kernel_printk ) {
+				printk("<1>## type:0x%x,pid:%d,vpn:%llu,ppn:%lu\n",
+						free_page_table_get_clear,*pid_trace,(addr >> PAGE_SHIFT),(ptep->pte >> PAGE_SHIFT));
+				num_pte_kernel_printk ++;
+			}
+        }
+
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags); 
+#endif                                          
+    }
+#endif //PAGE_TABLE_DEBUG__
+
+    pte = native_ptep_get_and_clear(ptep);
+	page_table_check_pte_clear(mm, addr, pte);
+	return pte;
+}
+
+pte_t ptep_get_and_clear_full(struct mm_struct *mm,
+			    unsigned long addr, pte_t *ptep,
+			    int full)
+{
+	pte_t pte;
+
+	inc_all_pte_clear_cnt();
+    inc_ptep_get_and_clear_full_cnt();
+
+	if (full) {
+		/*
+ 		 * Full address destruction in progress; paravirt does not
+ 		 * care about updates and native needs no locking
+ 		 *  	
+ 		 */
+           
+        // HMTT NOTATION: 
+		// In this path, native_pte_clear(NULL, 0, ptep) is called.
+        // We have set a filter of (addr != 0) in native_pte_clear()
+        // in order to bypass this path.
+
+#ifdef PAGE_TABLE_DEBUG__                       
+        if(page_table_trace){     
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+            spin_lock_irqsave(&e1k_dma_lock,page_table_flags); 
+#endif
+            page_table_val[0] = free_page_table_get_clear_full;
+            pid_trace = (unsigned int*)(&(page_table_val[1]));
+            pte_trace = (unsigned long long*)(&(page_table_val[5]));
+            
+            *pid_trace = (mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+            *pte_trace = (unsigned long long)(((addr >> PAGE_SHIFT) << 24) | pte_pfn(*ptep));
+
+            page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+            if(page_table_kernel_printk) {
+				if( num_pte_kernel_printk < max_num_pte_kernel_printk ) {
+					printk("<1>## type:0x%x,pid:%d,vpn:%llu,ppn:%lu\n",
+							free_page_table_get_clear_full,*pid_trace,(addr >> PAGE_SHIFT),(ptep->pte >> PAGE_SHIFT));
+					num_pte_kernel_printk ++;
+				}
+            }
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+            spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags); 
+#endif                                          
+        }
+#endif //PAGE_TABLE_DEBUG__
+                
+		pte = native_local_ptep_get_and_clear(ptep);
+		page_table_check_pte_clear(mm, addr, pte);
+	} else {
+		pte = ptep_get_and_clear(mm, addr, ptep);
+	}
+	return pte;
+}
+
+void set_pmd_at(struct mm_struct *mm, unsigned long addr,
+			      pmd_t *pmdp, pmd_t pmd)
+{
+	inc_all_set_pmd_cnt();
+	inc_set_pmd_at_cnt();
+
+	page_table_check_pmd_set(mm, addr, pmdp, pmd);
+	// set_pmd(pmdp, pmd); // we do not want this set_pmd to be recorded, because we have record the set_pmd_at
+	WRITE_ONCE(*pmdp, pmd);
+
+#if 1
+#ifdef PAGE_TABLE_DEBUG__                       
+    if(page_table_trace){     
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_lock_irqsave(&e1k_dma_lock,page_table_flags); 
+#endif
+            
+        page_table_val[0] = set_huge_page_table_magic;
+        pid_trace = (unsigned int*)(&(page_table_val[1]));
+        pmd_trace = (unsigned long long*)(&(page_table_val[5]));
+            
+        *pid_trace = (mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+        *pmd_trace = (unsigned long long)(((addr >> PMD_SHIFT) << 24) | pmd_pfn(pmd));
+
+		// check PSE bit of pmd entry to decide 
+		// whether to call page_table_trace_printk() or not
+		if (pmd_large(pmd)) {
+			page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+		 
+			if(page_table_kernel_printk) {
+				if( /*num_pte_kernel_printk < max_num_pte_kernel_printk &&*/ /*pte.pte >= (2048ULL << 20) && pte.pte < (2560ULL<<20)*/ 1 ){
+					printk("<1>## type:0x%x,pid:%d,vpn:0x%llx,pmd_val:0x%lx,pmd:0x%llx--0x%lx,0x%lx\n",
+							set_huge_page_table_magic,*pid_trace,(addr ),( pmd_val(pmd) ),*pmd_trace,((addr >> PMD_SHIFT) << 24),(pmd.pmd));
+					num_pte_kernel_printk ++;
+				}
+        	}
+		}       
+
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags); 
+#endif                                          
+    }
+#endif //PAGE_TABLE_DEBUG__
+#endif
+}
+EXPORT_SYMBOL(set_pmd_at);
+
+void native_set_pmd(pmd_t *pmdp, pmd_t pmd)
+{
+	inc_all_set_pmd_cnt();
+	inc_native_set_pmd_cnt();
+
+#ifdef PAGE_TABLE_DEBUG__                       
+	if(page_table_trace){
+#ifdef PAGE_TABLE_USE_SPINLOCK   
+        spin_lock_irqsave(&e1k_dma_lock,page_table_flags);
+#endif
+
+        page_table_val[0] = set_huge_page_table_magic;
+        pid_trace = (unsigned int*)(&(page_table_val[1]));
+        pmd_trace = (unsigned long long*)(&(page_table_val[5]));
+
+        *pid_trace = (current->mm == &init_mm)? (unsigned int)-1: (unsigned int)(current->pid);
+        *pmd_trace = (unsigned long long)(pmd.pmd);
+
+		// check PSE bit of pmd entry to decide 
+		// whether to call page_table_trace_printk() or not
+		if (pmd_large(pmd)) {
+			page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+
+	    	if(page_table_kernel_printk) {
+	        	if( /*num_pte_kernel_printk < max_num_pte_kernel_printk &&*/ /*pte.pte >= (2048ULL << 20) && pte.pte < (2560ULL<<20)*/ 1 ){
+	            	// printk("<1>## type:0x%x,pid:%d,vpn:0x%llx,pte_val:0x%lx,pte:0x%llx--0x%lx,0x%lx\n",set_huge_page_table_magic,*pid_trace,(addr ),( pte_val(pte) ),*pte_trace,((addr >> PAGE_SHIFT) << 24),(pte.pte));
+                            	// num_pte_kernel_printk ++;
+            	}
+        	}
+		}  
+
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags);
+#endif
+     }
+#endif //PAGE_TABLE_DEBUG__
+
+	WRITE_ONCE(*pmdp, pmd);
+}
+EXPORT_SYMBOL(native_set_pmd);
+
+void native_pmd_clear(pmd_t *pmd)
+{
+	inc_all_pmd_clear_cnt();
+	inc_native_pmd_clear_cnt();
+
+#ifdef PAGE_TABLE_DEBUG__                       
+    if(page_table_trace){     
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_lock_irqsave(&e1k_dma_lock,page_table_flags); 
+#endif
+            
+        page_table_val[0] = free_huge_page_table_magic;
+        pid_trace = (unsigned int*)(&(page_table_val[1]));
+        pmd_trace = (unsigned long long*)(&(page_table_val[5]));
+            
+        *pid_trace = (current->mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+        *pmd_trace = pmd->pmd;   // we don't know vpn
+
+		// check PSE bit of pmd entry to decide 
+		// whether to call page_table_trace_printk() or not
+		if (pmd_large(*pmd)) {
+			page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+            
+			if(page_table_kernel_printk) {
+				if( num_pte_kernel_printk < max_num_pte_kernel_printk ) {
+					printk("<1>## type:0x%x,pid:%d,vpn:%llu,ppn:%lu\n",
+							free_huge_page_table_magic,*pid_trace, 0 /*we don't know vpn*/,(pmd->pmd >> PMD_SHIFT));
+					num_pte_kernel_printk++;
+				}
+        	}
+		}
+
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags); 
+#endif                                          
+    }
+#endif //PAGE_TABLE_DEBUG__
+
+	native_set_pmd(pmd, native_make_pmd(0));
+}
+
+pmd_t pmdp_huge_get_and_clear(struct mm_struct *mm, unsigned long addr,
+				       pmd_t *pmdp)
+{
+	inc_all_pmd_clear_cnt();
+	inc_pmdp_huge_get_and_clear_cnt();
+
+#ifdef PAGE_TABLE_DEBUG__                       
+    if(page_table_trace) {     
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_lock_irqsave(&e1k_dma_lock,page_table_flags); 
+#endif
+
+        page_table_val[0] = free_huge_page_table_get_clear;
+        pid_trace = (unsigned int*)(&(page_table_val[1]));
+        pmd_trace = (unsigned long long*)(&(page_table_val[5]));
+            
+        *pid_trace = (mm == &init_mm)? (unsigned int)-1: (unsigned int)current->pid;
+        *pmd_trace = (unsigned long long)(((addr >> PMD_SHIFT) << 24) | pmd_pfn(*pmdp));
+
+		// check PSE bit of pmd entry to decide 
+		// whether to call page_table_trace_printk() or not
+		if (pmd_large(*pmdp)) {
+			page_table_trace_printk(page_table_val, PAGE_TABLE_TRACE_SIZE);
+            
+			if(page_table_kernel_printk) {
+				if( num_pte_kernel_printk < max_num_pte_kernel_printk ) {
+					printk("<1>## type:0x%x,pid:%d,vpn:%llu,ppn:%lu\n",
+							free_huge_page_table_get_clear,*pid_trace,(addr >> PMD_SHIFT),(pmdp->pmd >> PMD_SHIFT));
+					num_pte_kernel_printk ++;
+				}
+        	}
+		}
+
+#ifdef PAGE_TABLE_USE_SPINLOCK                         
+        spin_unlock_irqrestore(&e1k_dma_lock,page_table_flags); 
+#endif                                          
+    }
+#endif //PAGE_TABLE_DEBUG__
+
+	pmd_t pmd = native_pmdp_get_and_clear(pmdp);
+	page_table_check_pmd_clear(mm, addr, pmd);
+	return pmd;
+}
+
+void printk_io_nothing(void *ptr, size_t size)
+{
+}
+
+void  (*printk_io_trace)(void *ptr, size_t size) = &printk_io_nothing;
+int flag_start_io_trace = 0;
+long long ALL_num_IO = 0;
+long long num_mpage = 0;
+long long num_iomap = 0;
+long long num_buf = 0;
+long long num_aop = 0;
+
+
+void set_flag_start_io_trace(int flag){
+	flag_start_io_trace = flag;	
+}
+
+inline int get_flag_start_io_trace(int tmp){
+	return flag_start_io_trace;
+}
+
+inline void io_trace_printk(void *ptr, size_t size){
+	(*printk_io_trace)(ptr,size);
+}
+EXPORT_SYMBOL(printk_io_nothing);
+EXPORT_SYMBOL(printk_io_trace);
+EXPORT_SYMBOL(io_trace_printk);
+EXPORT_SYMBOL(flag_start_io_trace);
+EXPORT_SYMBOL(set_flag_start_io_trace);
+EXPORT_SYMBOL(get_flag_start_io_trace);
+EXPORT_SYMBOL(ALL_num_IO);
+EXPORT_SYMBOL(num_mpage);
+EXPORT_SYMBOL(num_iomap);
+EXPORT_SYMBOL(num_buf);
+EXPORT_SYMBOL(num_aop);
+
+/************************************************************************************
+ *  Printk PageTable Infomation -- End
+ ***********************************************************************************/

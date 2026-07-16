@@ -1001,19 +1001,39 @@ static inline pud_t native_local_pudp_get_and_clear(pud_t *pudp)
 	return res;
 }
 
+/***************************************************************************************
+ * Instrument dump pte code here  -- Begin
+ * Modified By Zhang Jiutian on 2015/11/12,
+ *          By ZCG on 2023/10/09 (yyyy/mm/dd)
+ * Last Modified: 2023/12/08
+ **************************************************************************************/
+#ifndef USE_HMTT
+#define USE_HMTT
+#endif
+
+#ifdef USE_HMTT
+extern void set_pte_at(struct mm_struct *mm, unsigned long addr,
+                                     pte_t *ptep , pte_t pte);
+#else
 static inline void set_pte_at(struct mm_struct *mm, unsigned long addr,
 			      pte_t *ptep, pte_t pte)
 {
 	page_table_check_pte_set(mm, addr, ptep, pte);
 	set_pte(ptep, pte);
 }
+#endif /* USE_HMTT */
 
+#ifdef USE_HMTT
+extern void set_pmd_at(struct mm_struct *mm, unsigned long addr,
+			      pmd_t *pmdp, pmd_t pmd);
+#else
 static inline void set_pmd_at(struct mm_struct *mm, unsigned long addr,
 			      pmd_t *pmdp, pmd_t pmd)
 {
 	page_table_check_pmd_set(mm, addr, pmdp, pmd);
 	set_pmd(pmdp, pmd);
 }
+#endif /* USE_HMTT */
 
 static inline void set_pud_at(struct mm_struct *mm, unsigned long addr,
 			      pud_t *pudp, pud_t pud)
@@ -1045,6 +1065,10 @@ extern int ptep_clear_flush_young(struct vm_area_struct *vma,
 				  unsigned long address, pte_t *ptep);
 
 #define __HAVE_ARCH_PTEP_GET_AND_CLEAR
+#ifdef USE_HMTT
+extern pte_t ptep_get_and_clear(struct mm_struct *mm, unsigned long addr,
+                                       pte_t *ptep);
+#else
 static inline pte_t ptep_get_and_clear(struct mm_struct *mm, unsigned long addr,
 				       pte_t *ptep)
 {
@@ -1052,8 +1076,14 @@ static inline pte_t ptep_get_and_clear(struct mm_struct *mm, unsigned long addr,
 	page_table_check_pte_clear(mm, addr, pte);
 	return pte;
 }
+#endif
 
 #define __HAVE_ARCH_PTEP_GET_AND_CLEAR_FULL
+#ifdef USE_HMTT
+extern pte_t ptep_get_and_clear_full(struct mm_struct *mm,
+                                            unsigned long addr, pte_t *ptep,
+                                            int full);
+#else
 static inline pte_t ptep_get_and_clear_full(struct mm_struct *mm,
 					    unsigned long addr, pte_t *ptep,
 					    int full)
@@ -1071,6 +1101,8 @@ static inline pte_t ptep_get_and_clear_full(struct mm_struct *mm,
 	}
 	return pte;
 }
+#endif
+
 
 #define __HAVE_ARCH_PTEP_SET_WRPROTECT
 static inline void ptep_set_wrprotect(struct mm_struct *mm,
@@ -1109,6 +1141,10 @@ static inline int pmd_write(pmd_t pmd)
 }
 
 #define __HAVE_ARCH_PMDP_HUGE_GET_AND_CLEAR
+#ifdef USE_HMTT
+extern pmd_t pmdp_huge_get_and_clear(struct mm_struct *mm, unsigned long addr,
+				       pmd_t *pmdp);
+#else
 static inline pmd_t pmdp_huge_get_and_clear(struct mm_struct *mm, unsigned long addr,
 				       pmd_t *pmdp)
 {
@@ -1118,6 +1154,11 @@ static inline pmd_t pmdp_huge_get_and_clear(struct mm_struct *mm, unsigned long 
 
 	return pmd;
 }
+#endif /* USE_HMTT */
+
+/***************************************************************************************
+ * Instrument dump pte code here  -- End
+ **************************************************************************************/
 
 #define __HAVE_ARCH_PUDP_HUGE_GET_AND_CLEAR
 static inline pud_t pudp_huge_get_and_clear(struct mm_struct *mm,

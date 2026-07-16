@@ -201,7 +201,18 @@ static pte_t *split_large_pmd(struct x86_mapping_info *info,
 
 	/* Populate the PTEs */
 	for (i = 0; i < PTRS_PER_PMD; i++) {
-		set_pte(&pte[i], __pte(address | page_flags));
+
+/***************************************************************************************
+ * Modified by HMTT --Begin
+ **************************************************************************************/
+
+		// set_pte(&pte[i], __pte(address | page_flags));
+		WRITE_ONCE(*(&pte[i]), __pte(address | page_flags));
+
+/***************************************************************************************
+ * Modified by HMTT --End
+ **************************************************************************************/
+		
 		address += PAGE_SIZE;
 	}
 
@@ -215,7 +226,17 @@ static pte_t *split_large_pmd(struct x86_mapping_info *info,
 	 * of a TLB multihit.
 	 */
 	pmd = __pmd((unsigned long)pte | info->kernpg_flag);
-	set_pmd(pmdp, pmd);
+
+/***************************************************************************************
+ * Modified by HMTT --Begin
+ **************************************************************************************/
+	// set_pmd(pmdp, pmd);
+	WRITE_ONCE(*pmdp, pmd);
+
+/***************************************************************************************
+ * Modified by HMTT --End
+ **************************************************************************************/
+
 	/* Flush TLB to establish the new PMD */
 	write_cr3(top_level_pgt);
 
@@ -304,7 +325,18 @@ static int set_clr_page_flags(struct x86_mapping_info *info,
 	pte = *ptep;
 	pte = pte_set_flags(pte, set);
 	pte = pte_clear_flags(pte, clr);
-	set_pte(ptep, pte);
+
+/***************************************************************************************
+ * Modified by HMTT --Begin
+ **************************************************************************************/
+
+	// set_pte(ptep, pte);
+	WRITE_ONCE(*ptep, pte);
+
+/***************************************************************************************
+ * Modified by HMTT --End
+ **************************************************************************************/
+
 
 	/*
 	 * If the encryption attribute is being set, then change the page state to

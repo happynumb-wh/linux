@@ -2,6 +2,11 @@
 #include <linux/bitops.h>
 #include <linux/types.h>
 #include <linux/slab.h>
+#include <linux/debugfs.h>
+#include <linux/fs.h>
+#include <linux/seq_file.h>
+#include <linux/smp.h>
+#include <linux/string.h>
 
 #include <asm/cpu_entry_area.h>
 #include <asm/perf_event.h>
@@ -346,6 +351,267 @@ void fini_debug_store_on_cpu(int cpu)
 	wrmsr_on_cpu(cpu, MSR_IA32_DS_AREA, 0, 0);
 }
 
+/*
+ * pebs_ext=<cpu>:<pa_hex>:<size_hex>
+ * Redirect one CPU's PEBS output to a reserved physical address.
+ * pebs_ext_cache=uc|wc|wb selects the kernel mapping cache attribute.
+ * Example:  pebs_ext=2:0x380001000:0x7fffe000
+ */
+enum pebs_ext_cache_mode {
+	PEBS_EXT_CACHE_UC,
+	PEBS_EXT_CACHE_WC,
+	PEBS_EXT_CACHE_WB,
+};
+
+static int    pebs_ext_cpu  = -1;
+static u64    pebs_ext_pa;
+static size_t pebs_ext_size;
+static bool   pebs_ext_count_only;
+static bool   pebs_ext_preserve;
+static enum pebs_ext_cache_mode pebs_ext_cache_mode = PEBS_EXT_CACHE_UC;
+static DEFINE_PER_CPU(void __iomem *, pebs_ext_vaddr);
+static DEFINE_PER_CPU(u64, pebs_ext_total_records);
+static DEFINE_PER_CPU(u64, pebs_ext_drain_count);
+static DEFINE_PER_CPU(u64, pebs_ext_suppressed_drain_count);
+static DEFINE_PER_CPU(u64, pebs_ext_full_stop_count);
+static DEFINE_PER_CPU(bool, pebs_ext_full);
+static DEFINE_PER_CPU(bool, pebs_ext_stopping_full);
+
+static const char *pebs_ext_cache_name(void)
+{
+	switch (pebs_ext_cache_mode) {
+	case PEBS_EXT_CACHE_WB:
+		return "WB";
+	case PEBS_EXT_CACHE_WC:
+		return "WC";
+	case PEBS_EXT_CACHE_UC:
+	default:
+		return "UC";
+	}
+}
+
+static bool pebs_ext_count_only_this_cpu(struct cpu_hw_events *cpuc)
+{
+	return pebs_ext_count_only && cpuc->ds &&
+	       pebs_ext_cpu == raw_smp_processor_id() &&
+	       per_cpu(pebs_ext_vaddr, pebs_ext_cpu);
+}
+
+static bool pebs_ext_preserve_this_cpu(struct cpu_hw_events *cpuc)
+{
+	return pebs_ext_preserve && cpuc->ds &&
+	       pebs_ext_cpu == raw_smp_processor_id() &&
+	       per_cpu(pebs_ext_vaddr, pebs_ext_cpu);
+}
+
+static bool pebs_ext_preserve_mapping_cpu(int cpu)
+{
+	return pebs_ext_preserve && cpu == pebs_ext_cpu &&
+	       per_cpu(pebs_ext_vaddr, cpu);
+}
+
+static u64 pebs_ext_records_between(struct cpu_hw_events *cpuc,
+				    unsigned long base, unsigned long top)
+{
+	unsigned int record_size = cpuc->pebs_record_size;
+
+	if (!record_size)
+		record_size = x86_pmu.pebs_record_size;
+	if (!record_size || top <= base)
+		return 0;
+
+	return (top - base) / record_size;
+}
+
+static u64 pebs_ext_current_records_cpu(int cpu)
+{
+	struct cpu_hw_events *cpuc;
+	struct debug_store *ds;
+	unsigned long base, top, max;
+
+	if (cpu != pebs_ext_cpu || !per_cpu(pebs_ext_vaddr, cpu))
+		return 0;
+
+	cpuc = &per_cpu(cpu_hw_events, cpu);
+	ds = cpuc->ds;
+	if (!ds)
+		return 0;
+
+	base = READ_ONCE(ds->pebs_buffer_base);
+	top = READ_ONCE(ds->pebs_index);
+	max = READ_ONCE(ds->pebs_absolute_maximum);
+	if (max > base && top > max)
+		top = max;
+
+	return pebs_ext_records_between(cpuc, base, top);
+}
+
+static int __init setup_pebs_ext(char *str)
+{
+	u64 pa, sz;
+	int cpu;
+	if (sscanf(str, "%d:%llx:%llx", &cpu, &pa, &sz) != 3)
+		return 0;
+	pebs_ext_cpu  = cpu;
+	pebs_ext_pa   = pa;
+	pebs_ext_size = (size_t)sz;
+	pr_info("pebs_ext: CPU%d PA=0x%llx size=%lluMB\n", cpu, pa, sz >> 20);
+	return 1;
+}
+__setup("pebs_ext=", setup_pebs_ext);
+
+static int __init setup_pebs_ext_count_only(char *str)
+{
+	pebs_ext_count_only = !(str && *str == '0');
+	pr_info("pebs_ext: count_only=%d\n", pebs_ext_count_only ? 1 : 0);
+	return 1;
+}
+__setup("pebs_ext_count_only=", setup_pebs_ext_count_only);
+
+static int __init setup_pebs_ext_preserve(char *str)
+{
+	pebs_ext_preserve = !(str && *str == '0');
+	pr_info("pebs_ext: preserve=%d\n", pebs_ext_preserve ? 1 : 0);
+	return 1;
+}
+__setup("pebs_ext_preserve=", setup_pebs_ext_preserve);
+
+static int __init setup_pebs_ext_cache(char *str)
+{
+	if (!str || !*str)
+		return 0;
+
+	if (!strcmp(str, "wb") || !strcmp(str, "WB") ||
+	    !strcmp(str, "cache") || !strcmp(str, "cached"))
+		pebs_ext_cache_mode = PEBS_EXT_CACHE_WB;
+	else if (!strcmp(str, "wc") || !strcmp(str, "WC") ||
+		 !strcmp(str, "writecombine") ||
+		 !strcmp(str, "writecombined"))
+		pebs_ext_cache_mode = PEBS_EXT_CACHE_WC;
+	else if (!strcmp(str, "uc") || !strcmp(str, "UC") ||
+		 !strcmp(str, "uncache") || !strcmp(str, "uncached"))
+		pebs_ext_cache_mode = PEBS_EXT_CACHE_UC;
+	else {
+		pr_warn("pebs_ext: unknown cache mode '%s', keep %s\n",
+			str, pebs_ext_cache_name());
+		return 0;
+	}
+
+	pr_info("pebs_ext: cache=%s\n", pebs_ext_cache_name());
+	return 1;
+}
+__setup("pebs_ext_cache=", setup_pebs_ext_cache);
+
+static int pebs_ext_stats_show(struct seq_file *m, void *v)
+{
+	u64 total, current_records, capacity_records;
+	struct cpu_hw_events *cpuc;
+	struct debug_store *ds;
+	unsigned int record_size;
+	int cpu;
+
+	seq_printf(m, "count_only=%d\n", pebs_ext_count_only ? 1 : 0);
+	seq_printf(m, "preserve=%d\n", pebs_ext_preserve ? 1 : 0);
+	seq_printf(m, "target_cpu=%d\n", pebs_ext_cpu);
+	seq_printf(m, "pa=0x%llx\n", pebs_ext_pa);
+	seq_printf(m, "size=0x%zx\n", pebs_ext_size);
+	seq_printf(m, "cache=%s\n", pebs_ext_cache_name());
+
+	for_each_possible_cpu(cpu) {
+		cpuc = &per_cpu(cpu_hw_events, cpu);
+		ds = cpuc->ds;
+		record_size = cpuc->pebs_record_size;
+		if (!record_size)
+			record_size = x86_pmu.pebs_record_size;
+		capacity_records = 0;
+		if (ds && record_size && ds->pebs_absolute_maximum >
+					       ds->pebs_buffer_base)
+			capacity_records = (ds->pebs_absolute_maximum -
+					    ds->pebs_buffer_base) / record_size;
+		total = per_cpu(pebs_ext_total_records, cpu);
+		current_records = pebs_ext_current_records_cpu(cpu);
+		seq_printf(m,
+			   "cpu%d total_records=%llu current_records=%llu effective_total_records=%llu capacity_records=%llu valid_bytes=%llu drain_count=%llu suppressed_drain_count=%llu full=%d full_stop_count=%llu\n",
+			   cpu, total, current_records, total + current_records,
+			   capacity_records,
+			   current_records * (u64)record_size,
+			   per_cpu(pebs_ext_drain_count, cpu),
+			   per_cpu(pebs_ext_suppressed_drain_count, cpu),
+			   per_cpu(pebs_ext_full, cpu) ? 1 : 0,
+			   per_cpu(pebs_ext_full_stop_count, cpu));
+	}
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(pebs_ext_stats);
+
+struct pebs_ext_reset_request {
+	int result;
+};
+
+static void pebs_ext_reset_cpu(void *arg)
+{
+	struct pebs_ext_reset_request *request = arg;
+	struct cpu_hw_events *cpuc = this_cpu_ptr(&cpu_hw_events);
+	struct debug_store *ds = cpuc->ds;
+
+	if (!ds || !this_cpu_read(pebs_ext_vaddr)) {
+		request->result = -ENODEV;
+		return;
+	}
+	if (cpuc->n_pebs || cpuc->pebs_enabled) {
+		request->result = -EBUSY;
+		return;
+	}
+
+	WRITE_ONCE(ds->pebs_index, ds->pebs_buffer_base);
+	this_cpu_write(pebs_ext_total_records, 0);
+	this_cpu_write(pebs_ext_drain_count, 0);
+	this_cpu_write(pebs_ext_suppressed_drain_count, 0);
+	this_cpu_write(pebs_ext_full_stop_count, 0);
+	this_cpu_write(pebs_ext_full, false);
+	this_cpu_write(pebs_ext_stopping_full, false);
+	request->result = 0;
+}
+
+static ssize_t pebs_ext_reset_write(struct file *file, const char __user *buf,
+					    size_t count, loff_t *ppos)
+{
+	struct pebs_ext_reset_request request = { .result = 0 };
+	int ret;
+
+	if (pebs_ext_cpu < 0 || !cpu_possible(pebs_ext_cpu))
+		return -ENODEV;
+
+	ret = smp_call_function_single(pebs_ext_cpu, pebs_ext_reset_cpu,
+				       &request, 1);
+	if (ret)
+		return ret;
+	if (request.result)
+		return request.result;
+
+	return count;
+}
+
+static const struct file_operations pebs_ext_reset_fops = {
+	.write = pebs_ext_reset_write,
+	.llseek = no_llseek,
+};
+
+static int __init pebs_ext_debugfs_init(void)
+{
+	struct dentry *dir;
+
+	dir = debugfs_create_dir("pebs_ext", NULL);
+	if (IS_ERR_OR_NULL(dir))
+		return 0;
+
+	debugfs_create_file("stats", 0444, dir, NULL, &pebs_ext_stats_fops);
+	debugfs_create_file("reset", 0200, dir, NULL, &pebs_ext_reset_fops);
+	return 0;
+}
+late_initcall(pebs_ext_debugfs_init);
+
 static DEFINE_PER_CPU(void *, insn_buffer);
 
 static void ds_update_cea(void *cea, void *addr, size_t size, pgprot_t prot)
@@ -408,6 +674,49 @@ static int alloc_pebs_buffer(int cpu)
 	if (!x86_pmu.pebs)
 		return 0;
 
+	if (pebs_ext_cpu == cpu && pebs_ext_pa) {
+		void __iomem *ext;
+		u64 max;
+
+		if (pebs_ext_preserve_mapping_cpu(cpu)) {
+			ext = per_cpu(pebs_ext_vaddr, cpu);
+			hwev->ds_pebs_vaddr = (void *)ext;
+			pr_info("pebs_ext: CPU%d reusing %s mapping VA=0x%lx index=0x%llx\n",
+				cpu, pebs_ext_cache_name(), (unsigned long)ext,
+				ds->pebs_index);
+			return 0;
+		}
+
+		switch (pebs_ext_cache_mode) {
+		case PEBS_EXT_CACHE_WB:
+			ext = ioremap_cache(pebs_ext_pa, pebs_ext_size);
+			break;
+		case PEBS_EXT_CACHE_WC:
+			ext = ioremap_wc(pebs_ext_pa, pebs_ext_size);
+			break;
+		case PEBS_EXT_CACHE_UC:
+		default:
+			ext = ioremap_uc(pebs_ext_pa, pebs_ext_size);
+			break;
+		}
+
+		if (!ext)
+			return -ENOMEM;
+		per_cpu(pebs_ext_vaddr, cpu) = ext;
+		hwev->ds_pebs_vaddr = (void *)ext;
+		ds->pebs_buffer_base = (unsigned long)ext;
+		ds->pebs_index       = ds->pebs_buffer_base;
+		max = pebs_ext_size -
+		      (pebs_ext_size % x86_pmu.pebs_record_size);
+		ds->pebs_absolute_maximum = ds->pebs_buffer_base + max;
+		pr_info("pebs_ext: CPU%d %s %zuMB VA=0x%lx base=0x%llx max=0x%llx bytes=%llu record_size=%d\n",
+			cpu, pebs_ext_cache_name(), pebs_ext_size >> 20,
+			(unsigned long)ext,
+			ds->pebs_buffer_base, ds->pebs_absolute_maximum,
+			max, x86_pmu.pebs_record_size);
+		return 0;
+	}
+
 	buffer = dsalloc_pages(bsiz, GFP_KERNEL, cpu);
 	if (unlikely(!buffer))
 		return -ENOMEM;
@@ -442,6 +751,16 @@ static void release_pebs_buffer(int cpu)
 
 	if (!x86_pmu.pebs)
 		return;
+
+	if (pebs_ext_cpu == cpu && per_cpu(pebs_ext_vaddr, cpu)) {
+		if (pebs_ext_preserve_mapping_cpu(cpu))
+			return;
+
+		iounmap(per_cpu(pebs_ext_vaddr, cpu));
+		per_cpu(pebs_ext_vaddr, cpu) = NULL;
+		hwev->ds_pebs_vaddr = NULL;
+		return;
+	}
 
 	kfree(per_cpu(insn_buffer, cpu));
 	per_cpu(insn_buffer, cpu) = NULL;
@@ -500,14 +819,33 @@ static void release_bts_buffer(int cpu)
 static int alloc_ds_buffer(int cpu)
 {
 	struct debug_store *ds = &get_cpu_entry_area(cpu)->cpu_debug_store;
+	u64 pebs_buffer_base = 0, pebs_index = 0;
+	u64 pebs_absolute_maximum = 0, pebs_interrupt_threshold = 0;
+	bool preserve_pebs = pebs_ext_preserve_mapping_cpu(cpu);
+
+	if (preserve_pebs) {
+		pebs_buffer_base = ds->pebs_buffer_base;
+		pebs_index = ds->pebs_index;
+		pebs_absolute_maximum = ds->pebs_absolute_maximum;
+		pebs_interrupt_threshold = ds->pebs_interrupt_threshold;
+	}
 
 	memset(ds, 0, sizeof(*ds));
+	if (preserve_pebs) {
+		ds->pebs_buffer_base = pebs_buffer_base;
+		ds->pebs_index = pebs_index;
+		ds->pebs_absolute_maximum = pebs_absolute_maximum;
+		ds->pebs_interrupt_threshold = pebs_interrupt_threshold;
+	}
 	per_cpu(cpu_hw_events, cpu).ds = ds;
 	return 0;
 }
 
 static void release_ds_buffer(int cpu)
 {
+	if (pebs_ext_preserve_mapping_cpu(cpu))
+		return;
+
 	per_cpu(cpu_hw_events, cpu).ds = NULL;
 }
 
@@ -1029,7 +1367,8 @@ static inline void pebs_update_threshold(struct cpu_hw_events *cpuc)
 	else
 		reserved = max_pebs_events;
 
-	if (cpuc->n_pebs == cpuc->n_large_pebs) {
+	if (pebs_ext_preserve_this_cpu(cpuc) ||
+	    cpuc->n_pebs == cpuc->n_large_pebs) {
 		threshold = ds->pebs_absolute_maximum -
 			reserved * cpuc->pebs_record_size;
 	} else {
@@ -1037,6 +1376,13 @@ static inline void pebs_update_threshold(struct cpu_hw_events *cpuc)
 	}
 
 	ds->pebs_interrupt_threshold = threshold;
+	if (pebs_ext_cpu == raw_smp_processor_id() &&
+	    per_cpu(pebs_ext_vaddr, pebs_ext_cpu))
+		pr_info("pebs_ext: CPU%d threshold=0x%llx base=0x%llx max=0x%llx record_size=%d n_pebs=%d n_large_pebs=%d\n",
+			pebs_ext_cpu, ds->pebs_interrupt_threshold,
+			ds->pebs_buffer_base, ds->pebs_absolute_maximum,
+			cpuc->pebs_record_size, cpuc->n_pebs,
+			cpuc->n_large_pebs);
 }
 
 static void adaptive_pebs_record_size_update(void)
@@ -1292,6 +1638,11 @@ void intel_pmu_pebs_disable(struct perf_event *event)
 
 	if (cpuc->enabled)
 		wrmsrl(MSR_IA32_PEBS_ENABLE, cpuc->pebs_enabled);
+
+	if (pebs_ext_count_only_this_cpu(cpuc) &&
+	    cpuc->n_pebs == cpuc->n_large_pebs &&
+	    cpuc->n_pebs != cpuc->n_pebs_via_pt)
+		intel_pmu_drain_pebs_buffer();
 
 	hwc->config |= ARCH_PERFMON_EVENTSEL_INT;
 }
@@ -2102,8 +2453,9 @@ static void intel_pmu_drain_pebs_icl(struct pt_regs *iregs, struct perf_sample_d
 	struct debug_store *ds = cpuc->ds;
 	struct perf_event *event;
 	void *base, *at, *top;
-	int bit, size;
-	u64 mask;
+	int bit, size, active;
+	u64 mask, enabled;
+	u64 nrecords;
 
 	if (!x86_pmu.pebs_active)
 		return;
@@ -2111,15 +2463,59 @@ static void intel_pmu_drain_pebs_icl(struct pt_regs *iregs, struct perf_sample_d
 	base = (struct pebs_basic *)(unsigned long)ds->pebs_buffer_base;
 	top = (struct pebs_basic *)(unsigned long)ds->pebs_index;
 
-	ds->pebs_index = ds->pebs_buffer_base;
-
 	mask = ((1ULL << max_pebs_events) - 1) |
 	       (((1ULL << num_counters_fixed) - 1) << INTEL_PMC_IDX_FIXED);
 	size = INTEL_PMC_IDX_FIXED + num_counters_fixed;
 
+	if (pebs_ext_preserve_this_cpu(cpuc)) {
+		this_cpu_inc(pebs_ext_suppressed_drain_count);
+
+		if ((unsigned long)top >= ds->pebs_interrupt_threshold &&
+		    !this_cpu_read(pebs_ext_stopping_full)) {
+			if (!this_cpu_read(pebs_ext_full))
+				this_cpu_inc(pebs_ext_full_stop_count);
+			this_cpu_write(pebs_ext_full, true);
+			this_cpu_write(pebs_ext_stopping_full, true);
+
+			enabled = cpuc->pebs_enabled & mask;
+			for_each_set_bit(bit, (unsigned long *)&enabled, size) {
+				event = cpuc->events[bit];
+				if (event)
+					x86_pmu_stop(event, 0);
+			}
+
+			this_cpu_write(pebs_ext_stopping_full, false);
+		}
+		return;
+	}
+
+	ds->pebs_index = ds->pebs_buffer_base;
+
 	if (unlikely(base >= top)) {
 		intel_pmu_pebs_event_update_no_drain(cpuc, size);
 		return;
+	}
+
+	if (pebs_ext_count_only_this_cpu(cpuc)) {
+		active = hweight64(cpuc->pebs_enabled & mask);
+		if (active <= 1) {
+			nrecords = pebs_ext_records_between(cpuc,
+					(unsigned long)base, (unsigned long)top);
+			this_cpu_add(pebs_ext_total_records, nrecords);
+			this_cpu_inc(pebs_ext_drain_count);
+
+			if (active == 1) {
+				bit = __ffs64(cpuc->pebs_enabled & mask);
+				event = cpuc->events[bit];
+				if (event) {
+					if (event->hw.flags & PERF_X86_EVENT_AUTO_RELOAD)
+						intel_pmu_save_and_restart_reload(event, nrecords);
+					else
+						intel_pmu_save_and_restart(event);
+				}
+			}
+			return;
+		}
 	}
 
 	for (at = base; at < top; at += cpuc->pebs_record_size) {

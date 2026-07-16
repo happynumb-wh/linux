@@ -6297,6 +6297,130 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 # define SM_MASK_PREEMPT	SM_PREEMPT
 #endif
 
+/***************************************************************
+ * Printk Schedule Infomation -- Begin
+ *
+ * By:  Yungang Bao
+ * Date:   Sept 1, 2009
+ * Modified By CLC At 2011/03/07, 
+ *          By ZCG At 2023/10/09
+ * Last Edited on 2023/10/09 (yyyy/mm/dd)
+ * ***************************************************************/
+#define CONTEXT_SWITCH_DEBUG__
+#ifdef CONTEXT_SWITCH_DEBUG__
+
+#define CONTEXT_SWITCH_TRACE_SIZE 100
+
+static int context_switch_trace = 0;
+static int pid_comm_trace = 0;
+
+struct cs_trace_struct
+{
+	char cpu_id;
+	int prev_pid;
+	int next_pid;
+} cs_trace;
+
+#define CONTEXT_SWITCH_USE_SPINLOCK
+#ifdef CONTEXT_SWITCH_USE_SPINLOCK
+extern spinlock_t e1k_dma_lock;
+unsigned long context_switch_flags;
+#endif
+
+void context_switch_print_start(void)
+{
+	printk("**********************************************\n");
+}
+
+void context_switch_print_end(void)
+{
+	printk("**********************************************\n\n");
+}
+
+int pid_comm_start_trace(void)
+{
+	pid_comm_trace = 1;
+
+	context_switch_print_start();
+	printk("pid_comm_start_trace!\n");
+	context_switch_print_end();
+
+	return 0;
+}
+
+int pid_comm_stop_trace(void)
+{
+	pid_comm_trace = 0;
+
+	context_switch_print_start();
+	printk("context_switch_stop_trace!\n");
+	context_switch_print_end();
+
+	return 0;
+}
+
+int pid_comm_stop_and_clear_trace(void)
+{
+	context_switch_print_start();
+	printk("context_switch_stop_and_clear_trace!\n");
+
+	pid_comm_trace = 0;
+	context_switch_print_end();
+
+	return 0;
+}
+
+int context_switch_start_trace(void)
+{
+
+	context_switch_trace = 1;
+
+	context_switch_print_start();
+	printk("context_switch_start_trace!\n");
+	context_switch_print_end();
+
+	return 0;
+}
+
+int context_switch_stop_trace(void)
+{
+	context_switch_trace = 0;
+
+	context_switch_print_start();
+	printk("context_switch_stop_trace!\n");
+	context_switch_print_end();
+
+	return 0;
+}
+
+int context_switch_stop_and_clear_trace(void)
+{
+	context_switch_print_start();
+	printk("context_switch_stop_and_clear_trace!\n");
+
+	context_switch_trace = 0;
+	context_switch_print_end();
+
+	return 0;
+}
+
+extern void (*printk_for_trace)(void *ptr, size_t size);
+
+void context_switch_trace_printk(void *ptr, size_t size)
+{
+	(*printk_for_trace)(ptr, size);
+}
+
+EXPORT_SYMBOL(pid_comm_start_trace);
+EXPORT_SYMBOL(pid_comm_stop_trace);
+EXPORT_SYMBOL(pid_comm_stop_and_clear_trace);
+EXPORT_SYMBOL(context_switch_start_trace);
+EXPORT_SYMBOL(context_switch_stop_trace);
+EXPORT_SYMBOL(context_switch_stop_and_clear_trace);
+
+#endif // SWITCH_DUMP_DEBUG__
+
+
 /*
  * __schedule() is the main scheduler function.
  *
@@ -6454,8 +6578,40 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 
 		trace_sched_switch(sched_mode & SM_MASK_PREEMPT, prev, next, prev_state);
 
+/********************************* ADD FOR TRACE CONTEXT SWITCH --begin ****************************************/
+#ifdef CONTEXT_SWITCH_DEBUG__
+		if (context_switch_trace)
+		{
+
+			cs_trace.cpu_id = (char)(cpu & 0xFF);
+			cs_trace.prev_pid = (unsigned int)prev->pid;
+			cs_trace.next_pid = (unsigned int)next->pid;
+
+#ifdef CONTEXT_SWITCH_USE_SPINLOCK
+			spin_lock_irqsave(&e1k_dma_lock, context_switch_flags);
+#endif
+			context_switch_trace_printk(&cs_trace, CONTEXT_SWITCH_TRACE_SIZE);
+#ifdef CONTEXT_SWITCH_USE_SPINLOCK
+			spin_unlock_irqrestore(&e1k_dma_lock, context_switch_flags);
+#endif
+		}
+#endif // SWITCH_DUMP_DEBUG__
+/********************************* ADD FOR TRACE CONTEXT SWITCH --end ****************************************/
+
 		/* Also unlocks the rq: */
 		rq = context_switch(rq, prev, next, &rf);
+/********************************* ADD FOR TRACE PID & CMD --begin ****************************************/
+#ifdef CONTEXT_SWITCH_DEBUG__
+		if (pid_comm_trace)
+		{
+			if ((next->flags & 0x00000080) == 0)
+			{
+				printk("pid=%5d  cmd=%s\n", next->pid, next->comm);
+				next->flags |= 0x00000080;
+			}
+		}
+#endif
+/********************************* ADD FOR TRACE PID & CMD --end ****************************************/
 	} else {
 		rq->clock_update_flags &= ~(RQCF_ACT_SKIP|RQCF_REQ_SKIP);
 
@@ -6464,6 +6620,10 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 		raw_spin_rq_unlock_irq(rq);
 	}
 }
+
+/***************************************************************
+ * Printk Schedule Infomation -- end
+ * ***************************************************************/ 
 
 void __noreturn do_task_dead(void)
 {

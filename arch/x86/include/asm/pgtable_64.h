@@ -16,6 +16,29 @@
 #include <linux/threads.h>
 #include <asm/fixmap.h>
 
+/****************************************************************************************
+ * HMTT dump trace variations here  -- Begin
+ ***************************************************************************************/
+
+#include <linux/sched/task.h>
+#include <linux/sched.h>
+#include <linux/mm_types.h>
+
+#define PAGE_TABLE_DEBUG__
+#define PRINTK_PT_ADDR_DEBUG
+#define PAGE_TABLE_TRACE_SIZE  13
+
+extern int pt_addr_trace;
+extern char page_table_val[16];
+extern char set_pt_addr_magic;
+extern unsigned int       *pid_trace;
+extern unsigned long long *pte_trace;
+extern inline void page_table_trace_printk(void * ptr,size_t size);
+
+/****************************************************************************************
+ * HMTT dump trace variations here  -- End
+ ***************************************************************************************/
+
 extern p4d_t level4_kernel_pgt[512];
 extern p4d_t level4_ident_pgt[512];
 extern pud_t level3_kernel_pgt[512];
@@ -62,31 +85,63 @@ static inline bool mm_p4d_folded(struct mm_struct *mm)
 void set_pte_vaddr_p4d(p4d_t *p4d_page, unsigned long vaddr, pte_t new_pte);
 void set_pte_vaddr_pud(pud_t *pud_page, unsigned long vaddr, pte_t new_pte);
 
+/****************************************************************************************
+ * Instrument dum pte code here  -- Begin
+ * Modified By Zhang Jiutian on 2015/11/12
+ *          By ZCG on 2023/10/09 (yyyy/mm/dd)
+ * Last Modified: 2023/12/08
+ ***************************************************************************************/
+#ifndef USE_HMTT
+#define USE_HMTT
+#endif
+
+#ifdef USE_HMTT
+extern void native_set_pte(pte_t *ptep, pte_t pte);
+#else
 static inline void native_set_pte(pte_t *ptep, pte_t pte)
 {
 	WRITE_ONCE(*ptep, pte);
 }
+#endif /* USE_HMTT */
 
+#ifdef USE_HMTT
+extern void native_pte_clear(struct mm_struct *mm, unsigned long addr,
+                                    pte_t *ptep);
+#else
 static inline void native_pte_clear(struct mm_struct *mm, unsigned long addr,
 				    pte_t *ptep)
 {
 	native_set_pte(ptep, native_make_pte(0));
 }
+#endif /* USE_HMTT */
+
 
 static inline void native_set_pte_atomic(pte_t *ptep, pte_t pte)
 {
 	native_set_pte(ptep, pte);
 }
 
+#ifdef USE_HMTT
+extern void native_set_pmd(pmd_t *pmdp, pmd_t pmd);
+#else
 static inline void native_set_pmd(pmd_t *pmdp, pmd_t pmd)
 {
 	WRITE_ONCE(*pmdp, pmd);
 }
+#endif /* USE_HMTT */
 
+#ifdef USE_HMTT
+extern void native_pmd_clear(pmd_t *pmd);
+#else
 static inline void native_pmd_clear(pmd_t *pmd)
 {
 	native_set_pmd(pmd, native_make_pmd(0));
 }
+#endif /* USE_HMTT */
+
+/****************************************************************************************
+ * Instrument dum pte code here  --End
+ ***************************************************************************************/
 
 static inline pte_t native_ptep_get_and_clear(pte_t *xp)
 {

@@ -1379,6 +1379,10 @@ void release_ds_buffers(void);
 
 void reserve_ds_buffers(void);
 
+int __intel_pebs_ext_register_runtime_buffer(int cpu, void *vaddr,
+					      size_t size);
+int __intel_pebs_ext_unregister_runtime_buffer(int cpu, void *vaddr);
+
 void release_lbr_buffers(void);
 
 void reserve_lbr_buffers(void);

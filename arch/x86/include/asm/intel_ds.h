@@ -35,4 +35,9 @@ struct debug_store_buffers {
 	char	pebs_buffer[PEBS_BUFFER_SIZE];
 };
 
+#define INTEL_PEBS_EXT_RUNTIME_API 1
+int intel_pebs_ext_register_runtime_buffer(int cpu, void *vaddr,
+					    size_t size);
+int intel_pebs_ext_unregister_runtime_buffer(int cpu, void *vaddr);
+
 #endif

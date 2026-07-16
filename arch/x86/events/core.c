@@ -423,6 +423,37 @@ void x86_release_hardware(void)
 	}
 }
 
+int intel_pebs_ext_register_runtime_buffer(int cpu, void *vaddr, size_t size)
+{
+	int err;
+
+	mutex_lock(&pmc_reserve_mutex);
+	if (atomic_read(&pmc_refcount))
+		err = -EBUSY;
+	else
+		err = __intel_pebs_ext_register_runtime_buffer(cpu, vaddr,
+							       size);
+	mutex_unlock(&pmc_reserve_mutex);
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(intel_pebs_ext_register_runtime_buffer);
+
+int intel_pebs_ext_unregister_runtime_buffer(int cpu, void *vaddr)
+{
+	int err;
+
+	mutex_lock(&pmc_reserve_mutex);
+	if (atomic_read(&pmc_refcount))
+		err = -EBUSY;
+	else
+		err = __intel_pebs_ext_unregister_runtime_buffer(cpu, vaddr);
+	mutex_unlock(&pmc_reserve_mutex);
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(intel_pebs_ext_unregister_runtime_buffer);
+
 /*
  * Check if we can create event of a certain type (that no conflicting events
  * are present).

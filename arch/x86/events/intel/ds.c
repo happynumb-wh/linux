@@ -377,6 +377,10 @@ static DEFINE_PER_CPU(u64, pebs_ext_full_stop_count);
 static DEFINE_PER_CPU(bool, pebs_ext_full);
 static DEFINE_PER_CPU(bool, pebs_ext_stopping_full);
 
+static int pebs_ext_runtime_cpu = -1;
+static void *pebs_ext_runtime_vaddr;
+static size_t pebs_ext_runtime_size;
+
 static const char *pebs_ext_cache_name(void)
 {
 	switch (pebs_ext_cache_mode) {
@@ -390,11 +394,29 @@ static const char *pebs_ext_cache_name(void)
 	}
 }
 
+static bool pebs_ext_runtime_buffer_cpu(int cpu)
+{
+	return READ_ONCE(pebs_ext_runtime_vaddr) &&
+	       READ_ONCE(pebs_ext_runtime_cpu) == cpu;
+}
+
+static bool pebs_ext_buffer_cpu(int cpu)
+{
+	return pebs_ext_runtime_buffer_cpu(cpu) ||
+	       (cpu == pebs_ext_cpu && per_cpu(pebs_ext_vaddr, cpu));
+}
+
+static int pebs_ext_target_cpu(void)
+{
+	if (READ_ONCE(pebs_ext_runtime_vaddr))
+		return READ_ONCE(pebs_ext_runtime_cpu);
+	return pebs_ext_cpu;
+}
+
 static bool pebs_ext_count_only_this_cpu(struct cpu_hw_events *cpuc)
 {
 	return pebs_ext_count_only && cpuc->ds &&
-	       pebs_ext_cpu == raw_smp_processor_id() &&
-	       per_cpu(pebs_ext_vaddr, pebs_ext_cpu);
+	       pebs_ext_buffer_cpu(raw_smp_processor_id());
 }
 
 static bool pebs_ext_preserve_this_cpu(struct cpu_hw_events *cpuc)
@@ -429,7 +451,7 @@ static u64 pebs_ext_current_records_cpu(int cpu)
 	struct debug_store *ds;
 	unsigned long base, top, max;
 
-	if (cpu != pebs_ext_cpu || !per_cpu(pebs_ext_vaddr, cpu))
+	if (!pebs_ext_buffer_cpu(cpu))
 		return 0;
 
 	cpuc = &per_cpu(cpu_hw_events, cpu);
@@ -502,6 +524,46 @@ static int __init setup_pebs_ext_cache(char *str)
 }
 __setup("pebs_ext_cache=", setup_pebs_ext_cache);
 
+int __intel_pebs_ext_register_runtime_buffer(int cpu, void *vaddr, size_t size)
+{
+	if (!x86_pmu.pebs)
+		return -ENODEV;
+	if (!cpu_possible(cpu) || !vaddr || !size ||
+	    !IS_ALIGNED((unsigned long)vaddr, PAGE_SIZE) ||
+	    !IS_ALIGNED(size, PAGE_SIZE))
+		return -EINVAL;
+	if (pebs_ext_preserve)
+		return -EOPNOTSUPP;
+	if (READ_ONCE(pebs_ext_runtime_vaddr))
+		return -EBUSY;
+	if (per_cpu(cpu_hw_events, cpu).ds)
+		return -EBUSY;
+
+	WRITE_ONCE(pebs_ext_runtime_cpu, cpu);
+	WRITE_ONCE(pebs_ext_runtime_size, size);
+	WRITE_ONCE(pebs_ext_runtime_vaddr, vaddr);
+	pr_info("pebs_ext: registered runtime CPU%d VA=%p size=%zuMB\n",
+		cpu, vaddr, size >> 20);
+	return 0;
+}
+
+int __intel_pebs_ext_unregister_runtime_buffer(int cpu, void *vaddr)
+{
+	if (!READ_ONCE(pebs_ext_runtime_vaddr))
+		return -ENODATA;
+	if (READ_ONCE(pebs_ext_runtime_cpu) != cpu ||
+	    READ_ONCE(pebs_ext_runtime_vaddr) != vaddr)
+		return -EINVAL;
+	if (per_cpu(cpu_hw_events, cpu).ds)
+		return -EBUSY;
+
+	WRITE_ONCE(pebs_ext_runtime_vaddr, NULL);
+	WRITE_ONCE(pebs_ext_runtime_size, 0);
+	WRITE_ONCE(pebs_ext_runtime_cpu, -1);
+	pr_info("pebs_ext: unregistered runtime CPU%d VA=%p\n", cpu, vaddr);
+	return 0;
+}
+
 static int pebs_ext_stats_show(struct seq_file *m, void *v)
 {
 	u64 total, current_records, capacity_records;
@@ -516,6 +578,10 @@ static int pebs_ext_stats_show(struct seq_file *m, void *v)
 	seq_printf(m, "pa=0x%llx\n", pebs_ext_pa);
 	seq_printf(m, "size=0x%zx\n", pebs_ext_size);
 	seq_printf(m, "cache=%s\n", pebs_ext_cache_name());
+	seq_printf(m, "runtime_registered=%d\n",
+		   READ_ONCE(pebs_ext_runtime_vaddr) ? 1 : 0);
+	seq_printf(m, "runtime_cpu=%d\n", READ_ONCE(pebs_ext_runtime_cpu));
+	seq_printf(m, "runtime_size=0x%zx\n", READ_ONCE(pebs_ext_runtime_size));
 
 	for_each_possible_cpu(cpu) {
 		cpuc = &per_cpu(cpu_hw_events, cpu);
@@ -555,7 +621,7 @@ static void pebs_ext_reset_cpu(void *arg)
 	struct cpu_hw_events *cpuc = this_cpu_ptr(&cpu_hw_events);
 	struct debug_store *ds = cpuc->ds;
 
-	if (!ds || !this_cpu_read(pebs_ext_vaddr)) {
+	if (!ds || !pebs_ext_buffer_cpu(raw_smp_processor_id())) {
 		request->result = -ENODEV;
 		return;
 	}
@@ -579,11 +645,12 @@ static ssize_t pebs_ext_reset_write(struct file *file, const char __user *buf,
 {
 	struct pebs_ext_reset_request request = { .result = 0 };
 	int ret;
+	int cpu = pebs_ext_target_cpu();
 
-	if (pebs_ext_cpu < 0 || !cpu_possible(pebs_ext_cpu))
+	if (cpu < 0 || !cpu_possible(cpu))
 		return -ENODEV;
 
-	ret = smp_call_function_single(pebs_ext_cpu, pebs_ext_reset_cpu,
+	ret = smp_call_function_single(cpu, pebs_ext_reset_cpu,
 				       &request, 1);
 	if (ret)
 		return ret;
@@ -674,6 +741,24 @@ static int alloc_pebs_buffer(int cpu)
 	if (!x86_pmu.pebs)
 		return 0;
 
+	if (pebs_ext_runtime_buffer_cpu(cpu)) {
+		void *runtime = READ_ONCE(pebs_ext_runtime_vaddr);
+		size_t runtime_size = READ_ONCE(pebs_ext_runtime_size);
+		u64 max;
+
+		hwev->ds_pebs_vaddr = runtime;
+		ds->pebs_buffer_base = (unsigned long)runtime;
+		ds->pebs_index = ds->pebs_buffer_base;
+		max = runtime_size -
+		      (runtime_size % x86_pmu.pebs_record_size);
+		ds->pebs_absolute_maximum = ds->pebs_buffer_base + max;
+		pr_info("pebs_ext: CPU%d runtime %zuMB VA=%p base=0x%llx max=0x%llx bytes=%llu record_size=%d\n",
+			cpu, runtime_size >> 20, runtime,
+			ds->pebs_buffer_base, ds->pebs_absolute_maximum,
+			max, x86_pmu.pebs_record_size);
+		return 0;
+	}
+
 	if (pebs_ext_cpu == cpu && pebs_ext_pa) {
 		void __iomem *ext;
 		u64 max;
@@ -751,6 +836,12 @@ static void release_pebs_buffer(int cpu)
 
 	if (!x86_pmu.pebs)
 		return;
+
+	if (pebs_ext_runtime_buffer_cpu(cpu) &&
+	    hwev->ds_pebs_vaddr == READ_ONCE(pebs_ext_runtime_vaddr)) {
+		hwev->ds_pebs_vaddr = NULL;
+		return;
+	}
 
 	if (pebs_ext_cpu == cpu && per_cpu(pebs_ext_vaddr, cpu)) {
 		if (pebs_ext_preserve_mapping_cpu(cpu))
@@ -1376,13 +1467,15 @@ static inline void pebs_update_threshold(struct cpu_hw_events *cpuc)
 	}
 
 	ds->pebs_interrupt_threshold = threshold;
-	if (pebs_ext_cpu == raw_smp_processor_id() &&
-	    per_cpu(pebs_ext_vaddr, pebs_ext_cpu))
+	if (pebs_ext_buffer_cpu(raw_smp_processor_id())) {
+		int cpu = raw_smp_processor_id();
+
 		pr_info("pebs_ext: CPU%d threshold=0x%llx base=0x%llx max=0x%llx record_size=%d n_pebs=%d n_large_pebs=%d\n",
-			pebs_ext_cpu, ds->pebs_interrupt_threshold,
+			cpu, ds->pebs_interrupt_threshold,
 			ds->pebs_buffer_base, ds->pebs_absolute_maximum,
 			cpuc->pebs_record_size, cpuc->n_pebs,
 			cpuc->n_large_pebs);
+	}
 }
 
 static void adaptive_pebs_record_size_update(void)
